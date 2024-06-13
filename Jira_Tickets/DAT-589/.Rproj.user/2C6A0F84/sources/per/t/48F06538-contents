@@ -1,0 +1,211 @@
+---
+title: "prediction set script"
+author: "Andrew Lin"
+date: "2024-01-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+set.seed(10230)
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+library(DBI)
+library(RPostgres)
+library(Matrix)
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+
+pred_list<-AN_2024_Renewals_List%>%
+  filter(TERM==52)%>%
+  filter(DONOR_TYPE=="I")%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,EXPIRE_DATE,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,RATE,COPIES,TOTAL_PRICE)%>%
+  filter(EXPIRE_DATE>=as.Date("2024-01-01","%Y-%m-%d")&EXPIRE_DATE<as.Date("2024-02-01","%Y-%m-%d"))%>%
+  filter(RENEWAL_ORDER_DATE>as.Date("2024-01-01",format="%Y-%m-%d")|is.na(RENEWAL_ORDER_DATE))
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+an_user_jan<-an_user_info_pred_jan
+
+clickshare_info_preds_jan_1_onwards<-an_user_info_jan_2024%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  filter(Date>as.Date("2024-01-01",format="%Y-%m-%d"))
+
+an_user_bind<-rbind(an_user_jan,clickshare_info_preds_jan_1_onwards)
+
+  
+
+clickshare_info_preds<-an_user_bind%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(clickshare=`UID Clickshare (p60) (prop60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|clickshare=="No_ID"|is.na(clickshare),0,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse(`Content Type (p29) (prop29)`!="article"|is.na(`Content Type (p29) (prop29)`),`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check)%>%
+  group_by(Visitor_ID,`Visit Number`,Date)%>%
+  dplyr::summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            max_clickshare=max(clickshare))%>%
+  ungroup()%>%
+  group_by(Visitor_ID)%>%
+  mutate(max_clickshare=max(max_clickshare,na.rm=TRUE))
+
+
+clickshare_info_preds<-clickshare_info_preds%>%
+  filter(max_clickshare!=0)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+query_2<-'select userid,am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid from staging.clickshare_an_stg'
+
+clickshare_stuff<-dbGetQuery(prod,query_2)
+
+clickshare_list<-clickshare_stuff%>%
+  mutate(am1_subscriberid=ifelse(am1_subscriberid=='',NA,am1_subscriberid),
+         an1_subscriberid=ifelse(an1_subscriberid=='',NA,an1_subscriberid),
+         an2_subscriberid=ifelse(an2_subscriberid=='',NA,an2_subscriberid),
+         an3_subscriberid=ifelse(an3_subscriberid=='',NA,an3_subscriberid),
+         an4_subscriberid=ifelse(an4_subscriberid=='',NA,an4_subscriberid))%>%
+  mutate(sub_id=coalesce(am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid))%>%
+  select(userid,sub_id)%>%
+  filter(!is.na(sub_id))%>%
+  mutate(sub_id=as.double(sub_id))
+```
+
+```{r}
+ds<-pred_list%>%
+  mutate(SUB_ID=as.double(SUB_ID))%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  mutate(has_online_activity=ifelse(is.na(userid),0,1))%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,EXPIRE_DATE,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,RATE,TOTAL_PRICE,has_online_activity)%>%
+  left_join(clickshare_info_preds,by=c("userid"="max_clickshare"))%>%
+  mutate(has_online_activity=ifelse(is.na(Visitor_ID),0,has_online_activity))%>%
+  mutate(EXPIRE_DATE=as.Date(EXPIRE_DATE,format='%Y-%m-%d'))%>%
+  mutate(RENEWAL_ORDER_DATE=as.Date(RENEWAL_ORDER_DATE,format='%Y-%m-%d'))%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(reference_date=if_else(EXPIRE_DATE==RENEWAL_ORDER_DATE&(!is.na(EXPIRE_DATE)&!is.na(RENEWAL_ORDER_DATE)),EXPIRE_DATE,
+                               if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&(!is.na(EXPIRE_DATE)&!is.na(RENEWAL_ORDER_DATE)),RENEWAL_ORDER_DATE,
+                                      if_else((renewal_diff<(-30)|is.na(RENEWAL_ORDER_DATE)),EXPIRE_DATE,RENEWAL_ORDER_DATE))))%>%
+  mutate(difftime=as.numeric(difftime(reference_date,Date,units='days')))%>%
+  mutate(visit_id=paste(Visitor_ID,`Visit Number`,sep="_"))%>%
+  mutate(visit_id=ifelse(visit_id=="NA_NA",NA,visit_id))%>%
+  mutate(visit_id=ifelse(difftime>90|difftime<0,NA,visit_id),
+         Date=if_else(difftime>90|difftime<0,NA,Date),
+         n_articles=if_else(difftime>90|difftime<0,NA,n_articles),
+         n_non_articles=if_else(difftime>90|difftime<0,NA,n_non_articles))%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,has_online_activity,EXPIRE_DATE,RATE,TOTAL_PRICE)%>%
+  summarise(last_date=max(Date,na.rm=TRUE),
+            total_articles=sum(n_articles,na.rm=TRUE),
+            total_non_articles=sum(n_non_articles,na.rm=TRUE),
+            total_visits=n_distinct(visit_id,na.rm=TRUE),
+            n_users=n_distinct(userid))%>%
+  mutate(n_users=ifelse(is.na(last_date),0,n_users))%>%
+  mutate(total_visits=ifelse(is.na(last_date),0,total_visits))%>%
+  mutate(total_articles=ifelse(is.na(last_date),0,total_articles),
+         total_non_articles=ifelse(is.na(last_date),0,total_non_articles))%>%
+  mutate(recency=as.numeric(difftime(reference_date,last_date,units='days')))%>%
+  mutate(recency=ifelse(is.na(recency),90,recency))%>%
+  mutate(recency=ifelse(is.infinite(recency),90,recency))%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,EXPIRE_DATE,RENEWAL_ORDER_DATE,has_online_activity,total_articles,total_non_articles,total_visits,n_users,recency,RATE,TOTAL_PRICE)
+
+ds%>%
+  group_by(CUSTOMER_NUMBER,SUB_ID)%>%
+  mutate(n_rows=n())%>%
+  ungroup()%>%
+  filter(n_rows>1)
+
+dupli_stuff<-ds%>%
+  group_by(CUSTOMER_NUMBER,SUB_ID)%>%
+  mutate(n_rows=n())%>%
+  ungroup()%>%
+  filter(n_rows>1)%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,EXPIRE_DATE,RATE,TOTAL_PRICE)%>%
+  summarise(has_online_activity=max(has_online_activity),
+            total_articles=max(total_articles),
+            total_non_articles=max(total_non_articles),
+            total_visits=max(total_visits),
+            n_users=max(n_users),
+            recency=min(recency))
+
+non_dupli<-ds%>%
+  group_by(CUSTOMER_NUMBER,SUB_ID)%>%
+  mutate(n_rows=n())%>%
+  filter(n_rows==1)
+
+full_ds<-rbind(non_dupli,dupli_stuff)
+
+
+
+pred_list%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  filter(CUSTOMER_NUMBER%in%full_ds$CUSTOMER_NUMBER)
+```
+
+
+```{r}
+prediction_set<-full_ds%>%
+  filter(is.na(RENEWAL_ORDER_DATE))
+
+
+prediction_features<-full_ds%>%
+  ungroup()%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  select(did_renew,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,recency,TOTAL_PRICE)
+
+prediction_features
+
+valid_set<-sparse.model.matrix(did_renew~.,data=prediction_features)[,-1]
+
+preds<-predict(tuned_xgboost,valid_set)
+num_preds<-as.numeric(preds>0.5)
+pred_list$prediction<-num_preds
+
+
+
+write.csv(target_list,"target_list_annual_january.csv")
+
+
+
+tuned_xgboost$feature_names
+
+
+val_list<-pred_list%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))
+
+confusionMatrix(as.factor(val_list$did_renew),as.factor(val_list$prediction))
+
+mcc(val_list$did_renew,val_list$prediction)
+```
+
+```{r}
+pred_list
+
+```
+
+
+
+
+
+

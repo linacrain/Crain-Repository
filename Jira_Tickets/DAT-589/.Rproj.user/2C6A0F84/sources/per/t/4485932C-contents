@@ -1,0 +1,337 @@
+---
+title: "Churn Model Cleaned"
+author: "Andrew Lin"
+date: "2024-01-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(mltools)
+library(tidyverse)
+library(caret)
+library(xgboost)
+library(Matrix)
+```
+
+```{r}
+set.seed(101)
+pre_5<-read.csv('data_set_annual_pre_5.csv')
+post_5<-read.csv('data_set_annual_post_5.csv')
+
+full_valid_set<-rbind(pre_5,post_5)
+write.csv(full_valid_set,"validation_set.csv")
+
+full_valid_set<-full_valid_set%>%
+  select(-X)
+
+training<-read.csv('full_training_set.csv')
+
+full_training<-training%>%
+  select(-X)%>%
+  mutate(did_renew=ifelse(did_renew=="renew",1,0))
+
+full_training
+
+trainSize <- round(0.80 * nrow(full_training))
+
+trainIndex <- sample(nrow(full_training), trainSize)
+trainDF <- full_training %>% dplyr::slice(trainIndex)
+
+trainDF%>%
+  group_by(did_renew)%>%
+  summarise(n=n())
+
+sparse_matrix<-sparse.model.matrix(did_renew~.,data=trainDF)[,-1]
+
+output_vector<-trainDF$did_renew
+
+bst<-xgboost(data=sparse_matrix,label=output_vector,max_depth=20,
+               eta=1,nthread=2,nrounds=20,objective="binary:logistic",scale_pos_weight=980/3683)
+
+zero_group<-full_training%>%
+  filter(did_renew==0)
+
+one_group<-full_training%>%
+  filter(did_renew==1)
+
+one_sample<-sample(nrow(one_group),1223)
+
+full_one<-one_group[one_sample,]
+
+balanced_ds<-rbind(zero_group,one_group)
+
+sparse_2<-sparse.model.matrix(did_renew~.,balanced_ds)[,-1]
+
+output_balance<-balanced_ds$did_renew
+
+bst_balan<-xgboost(data=sparse_2,label=output_balance,max_depth=10,eta=1,nthread=2,nrounds=20,objective="binary:logistic")
+```
+
+```{r}
+full_training
+```
+
+
+
+
+```{r}
+full_validation<-full_valid_set%>%
+  mutate(month=month(EXPIRE_DATE),
+         ref_month=month(reference_date))%>%
+  mutate(year=year(EXPIRE_DATE),
+         ref_year=year(reference_date))%>%
+  filter(ref_year>=year)%>%
+  filter(ref_month>=month)%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  ungroup()%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))
+
+valid_set_model<-full_valid_set%>%
+  mutate(month=month(EXPIRE_DATE),
+         ref_month=month(reference_date))%>%
+  mutate(year=year(EXPIRE_DATE),
+         ref_year=year(reference_date))%>%
+  filter(ref_year>=year)%>%
+  filter(ref_month>=month)%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  ungroup()%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))%>%
+  select(did_renew,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,recency,TOTAL_PRICE)
+
+valid_set<-sparse.model.matrix(did_renew~.,data=valid_set_model)[,-1]
+
+pred<-predict(bst,valid_set)
+
+prediction<-as.numeric(pred>0.5)
+
+full_validation$pred<-prediction
+
+full_validation%>%
+  mutate(outcome=ifelse(did_renew==1&pred==1,"TP",
+                        ifelse(did_renew==0&pred==0,"TN",
+                               ifelse(did_renew==0&pred==1,"FP","FN"))))%>%
+  group_by(month,outcome)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  spread(outcome,n)%>%
+  mutate(FN=as.double(FN),
+         FP=as.double(FP),
+         TN=as.double(TN),
+         TP=as.double(TP))%>%
+  mutate(total=FN+FP+TN+TP)%>%
+  mutate(accuracy=(FP+TP)/total,
+         sensitivity=(TP)/(TP+FN),
+         specificity=(TN)/(TN+FP),
+         F1=(2*TP)/(2*TP+FP+FN),
+         MCC_upper=(TP*TN-FP*FN),
+         MCC_bottom=sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)),
+         MCC=MCC_upper/MCC_bottom)%>%
+  select(-c(MCC_upper,MCC_bottom))%>%
+  summarise(mean_MCC=mean(MCC))
+```
+
+```{r}
+full_validation_2<-full_valid_set%>%
+  mutate(month=month(EXPIRE_DATE),
+         ref_month=month(reference_date))%>%
+  mutate(year=year(EXPIRE_DATE),
+         ref_year=year(reference_date))%>%
+  filter(ref_year>=year)%>%
+  filter(ref_month>=month)%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  ungroup()%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))
+
+pred_2<-predict(bst_balan,valid_set)
+
+prediction_2<-as.numeric(pred_2>0.5)
+
+full_validation_2$pred_2<-prediction_2
+
+full_validation_2%>%
+  mutate(outcome=ifelse(did_renew==1&pred_2==1,"TP",
+                        ifelse(did_renew==0&pred_2==0,"TN",
+                               ifelse(did_renew==0&pred_2==1,"FP","FN"))))%>%
+  group_by(month,outcome)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  spread(outcome,n)%>%
+  mutate(FN=as.double(FN),
+         FP=as.double(FP),
+         TN=as.double(TN),
+         TP=as.double(TP))%>%
+  mutate(total=FN+FP+TN+TP)%>%
+  mutate(accuracy=(FP+TP)/total,
+         sensitivity=(TP)/(TP+FN),
+         specificity=(TN)/(TN+FP),
+         F1=(2*TP)/(2*TP+FP+FN),
+         MCC_upper=(TP*TN-FP*FN),
+         MCC_bottom=sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)),
+         MCC=MCC_upper/MCC_bottom)%>%
+  select(-c(MCC_upper,MCC_bottom))%>%
+  summarise(mean_MCC=mean(MCC))
+```
+
+```{r}
+valid_set_model
+  
+train_valid <- round(0.80 * nrow(valid_set_model))
+
+trainIndex_valid <- createDataPartition(valid_set_model$did_renew, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+train<-valid_set_model[trainIndex_valid,]
+test<-valid_set_model[-trainIndex_valid,]
+
+train_set<-sparse.model.matrix(did_renew~.,data=train)[,-1]
+test_set<-sparse.model.matrix(did_renew~.,data=test)[,-1]
+
+output_vector_valid<-train$did_renew
+
+train%>%
+  group_by(did_renew)%>%
+  summarise(n=n())
+
+
+bst<-xgboost(data=train_set,label=output_vector_valid,max_depth=8,
+               eta=0.457,nthread=2,nrounds=249,lambda=0.793,objective="binary:logistic")
+
+valid_predict<-predict(bst,test_set)
+
+valid_predict<-as.numeric(valid_predict>0.5)
+
+confusionMatrix(as.factor(test$did_renew),as.factor(valid_predict))
+mcc(as.factor(test$did_renew),as.factor(valid_predict))
+```
+```{r}
+pred_3<-predict(bst,valid_set)
+pred_3<-as.numeric(pred_3>.5)
+
+full_validation_2$pred_3<-pred_3
+
+full_validation_2%>%
+  mutate(outcome=ifelse(did_renew==1&pred_3==1,"TP",
+                        ifelse(did_renew==0&pred_3==0,"TN",
+                               ifelse(did_renew==0&pred_3==1,"FP","FN"))))%>%
+  group_by(month,outcome)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  spread(outcome,n)%>%
+  mutate(FN=as.double(FN),
+         FP=as.double(FP),
+         TN=as.double(TN),
+         TP=as.double(TP))%>%
+  mutate(total=FN+FP+TN+TP)%>%
+  mutate(accuracy=(TN+TP)/total,
+         sensitivity=(TP)/(TP+FN),
+         specificity=(TN)/(TN+FP),
+         F1=(2*TP)/(2*TP+FP+FN),
+         MCC_upper=(TP*TN-FP*FN),
+         MCC_bottom=sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)),
+         MCC=MCC_upper/MCC_bottom)%>%
+  select(-c(MCC_upper,MCC_bottom))%>%
+  summarise(mean_mcc=mean(MCC))
+
+
+saveRDS(bst,"tuned_xgboost.rds")
+```
+
+```{r}
+CV_folds <- 5 # number of folds
+CV_repeats <- 3 # number of repeats
+minimum_resampling <- 5 # minimum number of resamples
+```
+
+```{r}
+xgb_params <- makeParamSet(
+  # The number of trees in the model (each one built sequentially)
+  makeIntegerParam("nrounds", lower = 100, upper = 500),
+  # number of splits in each tree
+  makeIntegerParam("max_depth", lower = 1, upper = 10),
+  # "shrinkage" - prevents overfitting
+  makeNumericParam("eta", lower = .1, upper = .5),
+  # L2 regularization - prevents overfitting
+  makeNumericParam("lambda", lower = -1, upper = 0, trafo = function(x) 10^x)
+)
+
+xgb_learner <- makeLearner(
+  "classif.xgboost",
+  predict.type = "response",
+  par.vals = list(
+    objective = "binary:logistic",
+    eval_metric = "error",
+    nrounds = 200
+  )
+)
+
+control <- makeTuneControlRandom(maxit = 1)
+
+resample_desc <- makeResampleDesc("CV", iters = 5)
+
+
+train_2<-train%>%
+  mutate(did_renew=as.factor(did_renew))
+
+test_2<-test%>%
+  mutate(did_renew=as.factor(did_renew))
+
+train_2
+
+traintask<-makeClassifTask(data = train_2, target = "did_renew", positive = 1)
+testtask<-makeClassifTask(data = test_2, target = "did_renew", positive = 1)
+
+xgb_model <- train(xgb_learner, task = traintask)
+result<-predict(xgb_model,testtask)
+
+tuned_params <- tuneParams(
+  learner = xgb_learner,
+  task = traintask,
+  resampling = resample_desc,
+  par.set = xgb_params,
+  control = control
+)
+
+xgb_tuned_learner <- setHyperPars(
+  learner = xgb_learner,
+  par.vals = tuned_params$x
+)
+xgb_model_tuned <- train(xgb_tuned_learner, traintask)
+result <- predict(xgb_model_tuned, testtask)
+
+xgb_tuned_learner
+
+full_validation$pred_4<-result
+
+f<-result$data
+
+f
+
+confusionMatrix(as.factor(f$truth),as.factor(f$response))
+
+mcc(f$truth,f$response)
+```
+
+```{r}
+example_list<-full_validation_2%>%
+  mutate(prediction=pred_3)%>%
+  select(-c(pred_2,pred_3))
+
+write.csv(example_list,"for_validation_data_set.csv")
+write.csv(train,"training_set.csv")
+write.csv(test,"test_set.csv")
+
+```
+
+
+
+

@@ -1,0 +1,780 @@
+---
+title: "Annual Models"
+author: "Andrew Lin"
+date: "2024-01-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+
+sandbox <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'sandbox',
+               sslmode='require')
+
+dev <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'dev',
+               sslmode='require')
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+zoominfo <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'zoominfo',
+               sslmode='require')
+
+
+
+dev_q<-"select owningorganizaion,shiptocustomernumber,publicationcode,termlength,subscriptionreference,startissuedate,datepaid,circulationstatus,autorenewalterm,dateadd(week,termlength,datepaid) as expire_date from stage_testing.advantagesubscriptionterms_stg where owningorganizaion like '%AN%'"
+```
+
+```{r}
+missing_info<-an_data_2024%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  filter(CUSTOMER_NUMBER%in%c(list$customer_number))%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,EXPIRE_DATE,TERM_NUMBER,IS_AUTO_RENEW,START_DATE)%>%
+  distinct()
+
+an_data_2024%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,EXPIRE_DATE,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE)%>%
+  filter(TERM==52)%>%
+  filter(EXPIRE_DATE<=as.Date('2023-06-01',format="%Y-%m-%d")&EXPIRE_DATE>=as.Date('2023-01-01',format="%Y-%m-%d"))
+```
+
+```{r}
+clickshare
+```
+
+
+```{r}
+clickshare_info<-an_user_info%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(clickshare=`UID Clickshare (p60) (prop60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),0,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse(`Content Type (p29) (prop29)`!="article"|is.na(`Content Type (p29) (prop29)`),`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check)%>%
+  group_by(Visitor_ID,`Visit Number`,Date)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            max_clickshare=max(clickshare))%>%
+  ungroup()%>%
+  group_by(Visitor_ID)%>%
+  mutate(max_clickshare=max(max_clickshare))%>%
+  ungroup()%>%
+  filter(max_clickshare!=0)
+
+clickshare_info_2<-an_user_info_2%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(clickshare=`UID Clickshare (p60) (prop60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),0,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse(`Content Type (p29) (prop29)`!="article"|is.na(`Content Type (p29) (prop29)`),`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check)%>%
+  group_by(Visitor_ID,`Visit Number`,Date)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            max_clickshare=max(clickshare))%>%
+  ungroup()%>%
+  group_by(Visitor_ID)%>%
+  mutate(max_clickshare=max(max_clickshare))%>%
+  ungroup()%>%
+  filter(max_clickshare!=0)
+
+
+clickshare_info<-an_user_3%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(clickshare=`UID Clickshare (p60) (prop60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),0,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse(`Content Type (p29) (prop29)`!="article"|is.na(`Content Type (p29) (prop29)`),`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check)%>%
+  group_by(Visitor_ID,`Visit Number`,Date)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            max_clickshare=max(clickshare))%>%
+  ungroup()%>%
+  group_by(Visitor_ID)%>%
+  mutate(max_clickshare=max(max_clickshare))%>%
+  ungroup()%>%
+  filter(max_clickshare!=0)
+  
+```
+
+```{r}
+query_2<-'select userid,am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid from staging.clickshare_an_stg'
+
+clickshare_stuff<-dbGetQuery(prod,query_2)
+
+clickshare_list<-clickshare_stuff%>%
+  mutate(am1_subscriberid=ifelse(am1_subscriberid=='',NA,am1_subscriberid),
+         an1_subscriberid=ifelse(an1_subscriberid=='',NA,an1_subscriberid),
+         an2_subscriberid=ifelse(an2_subscriberid=='',NA,an2_subscriberid),
+         an3_subscriberid=ifelse(an3_subscriberid=='',NA,an3_subscriberid),
+         an4_subscriberid=ifelse(an4_subscriberid=='',NA,an4_subscriberid))%>%
+  mutate(sub_id=coalesce(am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid))%>%
+  select(userid,sub_id)%>%
+  filter(!is.na(sub_id))%>%
+  mutate(sub_id=as.double(sub_id))
+
+
+
+
+```
+
+
+
+
+
+```{r}
+sub_list<-an_data_2024%>%
+  filter(DONOR_TYPE=="I")%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,EXPIRE_DATE,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,RATE,COPIES,TOTAL_PRICE)%>%
+  filter(TERM==52)%>%
+  filter(EXPIRE_DATE<=as.Date('2023-06-01',format="%Y-%m-%d")&EXPIRE_DATE>=as.Date('2023-01-01',format="%Y-%m-%d"))
+```
+
+```{r}
+sub_list_2
+```
+
+
+##```{r}
+
+expire_list<-sub_list%>%
+  mutate(SUB_ID=as.double(SUB_ID))%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  mutate(has_online_activity=ifelse(is.na(userid),0,1))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  filter(has_online_activity==1)%>%
+  select(userid,EXPIRE_DATE,SUB_ID,CUSTOMER_NUMBER)%>%
+  distinct()
+  
+
+user_behavior<-clickshare_info%>%
+  filter(max_clickshare%in%clickshare_list$userid)%>%
+  left_join(expire_list,by=c("max_clickshare"="userid"))%>%
+  filter(!is.na(EXPIRE_DATE))%>%
+  filter(Date<=EXPIRE_DATE)%>%
+  mutate(difftime=as.numeric(difftime(EXPIRE_DATE,Date,units='days')))%>%
+  filter(difftime<=90)%>%
+  ungroup()%>%
+  mutate(visit_id=paste(Visitor_ID,`Visit Number`,sep="_"))%>%
+  group_by(SUB_ID,CUSTOMER_NUMBER)%>%
+  summarise(last_date=max(Date),
+            total_articles=sum(n_articles),
+            total_non_articles=sum(n_non_articles),
+            total_visits=n_distinct(visit_id),
+            n_users=n_distinct(max_clickshare))
+
+user_behavior
+
+
+
+```{r}
+ds<-sub_list%>%
+  mutate(SUB_ID=as.double(SUB_ID))%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  mutate(has_online_activity=ifelse(is.na(userid),0,1))%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,EXPIRE_DATE,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,RATE,TOTAL_PRICE,has_online_activity)%>%
+  left_join(clickshare_info,by=c("userid"="max_clickshare"))%>%
+  mutate(has_online_activity=ifelse(is.na(Visitor_ID),0,has_online_activity))%>%
+  mutate(EXPIRE_DATE=as.Date(EXPIRE_DATE,format='%Y-%m-%d'))%>%
+  mutate(RENEWAL_ORDER_DATE=as.Date(RENEWAL_ORDER_DATE,format='%Y-%m-%d'))%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(reference_date=if_else(EXPIRE_DATE==RENEWAL_ORDER_DATE&(!is.na(EXPIRE_DATE)&!is.na(RENEWAL_ORDER_DATE)),EXPIRE_DATE,
+                               if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&(!is.na(EXPIRE_DATE)&!is.na(RENEWAL_ORDER_DATE)),RENEWAL_ORDER_DATE,
+                                      if_else((renewal_diff<(-30)|is.na(RENEWAL_ORDER_DATE)),EXPIRE_DATE,RENEWAL_ORDER_DATE))))%>%
+  mutate(difftime=as.numeric(difftime(reference_date,Date,units='days')))%>%
+  mutate(visit_id=paste(Visitor_ID,`Visit Number`,sep="_"))%>%
+  filter(is.na(Date)|(difftime<=90&difftime>=0))%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,has_online_activity,EXPIRE_DATE,RATE,TOTAL_PRICE)%>%
+  summarise(last_date=max(Date),
+            total_articles=sum(n_articles),
+            total_non_articles=sum(n_non_articles),
+            total_visits=n_distinct(visit_id,na.rm=TRUE),
+            n_users=n_distinct(userid))%>%
+  mutate(n_users=ifelse(is.na(last_date),0,n_users))%>%
+  mutate(total_visits=ifelse(is.na(last_date),0,total_visits))%>%
+  mutate(total_articles=ifelse(is.na(last_date),0,total_articles),
+         total_non_articles=ifelse(is.na(last_date),0,total_non_articles))%>%
+  mutate(recency=as.numeric(difftime(reference_date,last_date,units='days')))%>%
+  mutate(recency=ifelse(is.na(recency),90,recency))%>%
+  select(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,EXPIRE_DATE,RENEWAL_ORDER_DATE,has_online_activity,total_articles,total_non_articles,total_visits,n_users,recency,RATE,TOTAL_PRICE)
+  
+write.csv(ds,'data_set_annual.csv')
+
+ds
+  filter(is.na(reference_date))
+  
+  
+write.csv(ds,'data_set_annual_post_5.csv')
+
+data_set_annual
+write.csv(ds,'data_set_annual_pre_5.csv')
+```
+
+```{r}
+data_set_annual
+ds
+```
+```{r}
+
+```
+
+
+
+
+```{r}
+an_data_2024
+
+cust_reference<-"select * from reporting.customer_master_reference"
+an_demo<-"select * from reporting.mv_tbl__customer_demographic_an_mv__0"
+
+an_zoominfo<-"select * from staging.an_zoominfo_user_stg"
+
+cust_ref<-dbGetQuery(zoominfo, cust_reference)
+an_demographics<-dbGetQuery(zoominfo,an_demo)
+zinfo<-dbGetQuery(zoominfo,an_zoominfo)
+```
+
+```{r}
+an_ref_list<-cust_ref%>%
+  filter(str_detect(businessunitcode,"AN"))%>%
+  mutate(advantagecustomerid=as.double(advantagecustomerid))%>%
+  select(advantagecustomerid,clickshareuserid)%>%
+  distinct()
+
+z_info_table<-an_demographics%>%
+  filter(!is.na(z_zoominfocompanyid)|!is.na(z_zoominfocontactid))%>%
+  select(z_zoominfocontactid,z_zoominfocompanyid,promotesubscriptions,promoteeditorial,promoteevents,promotewebinars,promotethirdparty,promoteresearch,promoteadvertising,z_zoominfocompanyid,z_primaryindustry,z_ownershiptype,z_employees,z_companyrevenue,z_personjobfunction,z_personmanagementlevel)%>%
+  unique()%>%
+  mutate(z_info_full=paste(z_zoominfocontactid,z_zoominfocompanyid,sep="_"))%>%
+  mutate(promotesubscriptions=ifelse(promotesubscriptions=="N"|promotesubscriptions=="",0,1))%>%
+  mutate(promoteeditorial=ifelse(promoteeditorial=="N"|promoteeditorial=="",0,1))%>%
+  mutate(promoteevents=ifelse(promoteevents=="N"|promoteevents=="",0,1))%>%
+  mutate(promotewebinars=ifelse(promotewebinars=="N"|promotewebinars=="",0,1))%>%
+  mutate(promoteresearch=ifelse(promoteresearch=="N"|promoteresearch=="",0,1))%>%
+  mutate(promotethirdparty=ifelse(promotethirdparty=="N"|promotethirdparty=="",0,1))%>%
+  mutate(promoteadvertising=ifelse(promoteadvertising=="N"|promoteadvertising=="",0,1))
+
+z_info_table
+
+zinfo_demo<-zinfo%>%
+  mutate(customerid=coalesce(an1_customerid,an2_customerid,an3_customerid,an4_customerid,ac_customerid),
+         subid=coalesce(an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid,ac_subscriberid))%>%
+  select(customerid,subid,zoominfocontactid,zoominfocompanyid)%>%
+  mutate(z_info_full=paste(zoominfocontactid,zoominfocompanyid,sep="_"))%>%
+  left_join(z_info_table,by=c("z_info_full"="z_info_full"))%>%
+  distinct()%>%
+  mutate(customerid=as.double(customerid))
+
+zinfo_demo
+  
+
+
+
+
+
+ds%>%
+  left_join(zinfo_demo,by=c("CUSTOMER_NUMBER"="customerid"))%>%
+  filter(!is.na(promotesubscriptions))
+
+dupli_stuff<-ds%>%
+  group_by(CUSTOMER_NUMBER,SUB_ID)%>%
+  mutate(n_rows=n())%>%
+  ungroup()%>%
+  filter(n_rows>1)%>%
+  group_by(CUSTOMER_NUMBER,PUB_CODE,SUB_ID,TERM_NUMBER,reference_date,TERM,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,EXPIRE_DATE,RATE,TOTAL_PRICE)%>%
+  summarise(has_online_activity=max(has_online_activity),
+            total_articles=max(total_articles),
+            total_non_articles=max(total_non_articles),
+            total_visits=max(total_visits),
+            n_users=max(n_users),
+            recency=min(recency))
+
+non_dupli<-ds%>%
+  group_by(CUSTOMER_NUMBER,SUB_ID)%>%
+  mutate(n_rows=n())%>%
+  filter(n_rows==1)
+
+full_ds<-rbind(non_dupli,dupli_stuff)
+  
+
+full_ds%>%
+  left_join(zinfo_demo,by=c("CUSTOMER_NUMBER"="customerid"))
+
+full_ds%>%
+  select(PUB_CODE,TERM_NUMBER,)
+
+```
+
+```{r}
+base_ds
+
+training_ds<-full_ds%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))%>%
+  filter(reference_date>=as.Date('2023-01-01','%Y-%m-%d'))%>%
+  ungroup()%>%
+  select(id,did_renew,PUB_CODE,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,n_users,recency,TOTAL_PRICE,reference_date,EXPIRE_DATE)
+```
+
+```{r}
+an_data_2024%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  filter(CUSTOMER_NUMBER==7863797)
+```
+```{r}
+ggpairs(training_ds[,-c(1,3)])
+```
+```{r}
+full_training_set<-training_ds%>%
+  mutate(month=month(EXPIRE_DATE))%>%
+  filter(month!=5)%>%
+  mutate(did_renew=ifelse(did_renew==0,"churn","renew"))%>%
+  select(-c(id,reference_date,EXPIRE_DATE,month,PUB_CODE,n_users))
+
+trainSize <- round(0.80 * nrow(full_training_set))
+
+trainIndex <- sample(nrow(full_training_set), trainSize)
+trainDF <- full_training_set %>% dplyr::slice(trainIndex)
+testDF <- full_training_set %>% dplyr::slice(-trainIndex)
+
+trainDF
+
+
+trainDF%>%
+  group_by(did_renew)%>%
+  summarise(n=n())
+
+
+trainDF<-as.data.frame(trainDF)
+trainDF$did_renew<-as.factor(trainDF$did_renew)
+
+smote_train<-SMOTE(did_renew~.,trainDF,perc.over=600,perc.under=100)
+
+sparse_matrix<-sparse.model.matrix(did_renew~.,data=smote_train)[,-1]
+
+no_smote_train<-trainDF%>%
+  mutate(did_renew=ifelse(did_renew=="renew",1,0))
+
+smote_train<-smote_train%>%
+  mutate(did_renew=ifelse(did_renew=="renew",1,0))
+
+sparse_no_smote_matrix<-sparse.model.matrix(did_renew~.,data=no_smote_train)[,-1]
+
+
+output_vector<-smote_train$did_renew
+output_vector_no_smote<-no_smote_train$did_renew
+
+
+no_smote_train%>%
+  group_by(did_renew)%>%
+  summarise(n=n())
+
+
+head(sparse_matrix)
+
+bst <- xgboost(data = sparse_matrix, label = output_vector, max_depth = 10,
+               eta = 0.3, nthread = 2, nrounds = 10,objective = "binary:logistic")
+
+bst_2<-xgboost(data=sparse_no_smote_matrix,label=output_vector_no_smote,max_depth=10,
+               eta=0.3,nthread=2,nrounds=10,objective="binary:logistic",scale_pos_weight=976/3687)
+
+write.csv(full_training_set,"full_training_set.csv")
+write.csv()
+```
+
+
+```{r}
+importance <- xgb.importance(feature_names = colnames(sparse_matrix), model = bst)
+
+xgb.plot.importance(importance_matrix = importance)
+```
+```{r}
+importance_no_smote <- xgb.importance(feature_names = colnames(sparse_no_smote_matrix), model = bst_2)
+
+xgb.plot.importance(importance_matrix = importance_no_smote)
+```
+
+
+
+
+```{r}
+sparse_test_matrix<-sparse.model.matrix(did_renew~.,data=testDF)[,-1]
+
+testDF
+
+head(sparse_test_matrix)
+pred<-predict(bst,sparse_test_matrix)
+
+prediction <- as.numeric(pred > 0.5)
+
+testDF$pred<-prediction
+
+testDF<-testDF%>%
+  mutate(did_renew=ifelse(did_renew=="renew",1,0))
+
+testDF%>%
+  group_by(did_renew,pred)%>%
+  summarise(n=n())
+
+confusionMatrix(as.factor(prediction),as.factor(testDF$did_renew))
+
+testDF
+
+mcc(prediction,testDF$did_renew)
+```
+```{r}
+pred_2<-predict(bst_2,sparse_test_matrix)
+
+prediction_2 <- as.numeric(pred_2 > 0.5)
+
+testDF$pred_2<-prediction_2
+
+testDF%>%
+  group_by(did_renew,pred)%>%
+  summarise(n=n())
+
+confusionMatrix(as.factor(prediction_2),as.factor(testDF$did_renew))
+
+testDF
+
+mcc(prediction_2,testDF$did_renew)
+```
+
+
+
+
+```{r}
+validation_set<-training_ds%>%
+  mutate(month=month(EXPIRE_DATE))%>%
+  mutate(ref_month=month(reference_date))%>%
+  filter(month==5&ref_month>=5)%>%
+  select(-c(id,PUB_CODE,reference_date,EXPIRE_DATE,month,ref_month,n_users))
+
+validation_set
+
+sparse_validation_matrix<-sparse.model.matrix(did_renew~.,data=validation_set)[,-1]
+
+val_pred<-predict(bst,sparse_validation_matrix)
+val_pred_2<-predict(bst_2,sparse_validation_matrix)
+
+val_prediction <- as.numeric(val_pred > 0.5)
+val_prediction_2<- as.numeric(val_pred_2 > 0.5)
+
+validation_set$pred<-val_prediction
+validation_set$pred_2<-val_prediction_2
+
+confusionMatrix(as.factor(val_prediction),as.factor(validation_set$did_renew))
+
+validation_set%>%
+  filter(pred==0&did_renew==1)
+
+mcc(val_prediction,validation_set$did_renew)
+
+write.csv(validation_set,"5_validation_set.csv")
+```
+```{r}
+mcc(val_prediction,validation_set$did_renew)
+```
+
+
+
+```{r}
+confusionMatrix(as.factor(val_prediction_2),as.factor(validation_set$did_renew))
+```
+```{r}
+mcc(val_prediction_2,validation_set$did_renew)
+```
+```{r}
+no_smote_train[,-1]
+
+no_smote_matrix<-as.matrix(no_smote_train[,-1])
+shap_long <- shap.prep(xgb_model = bst_2, X_train = no_smote_matrix)
+
+shap_values <- shap.values(xgb_model = bst, X_train = sparse_matrix)
+
+shap.plot.summary(shap_long)
+```
+```{r}
+validation_ds<-full_ds%>%
+  mutate(month=month(EXPIRE_DATE),
+         ref_month=month(reference_date))%>%
+  mutate(year=year(EXPIRE_DATE),
+         ref_year=year(reference_date))%>%
+  filter(ref_year>=year)%>%
+  filter(ref_month>=month)%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  ungroup()%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))%>%
+  select(did_renew,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,recency,TOTAL_PRICE)
+
+sparse_full_validation_matrix<-sparse.model.matrix(did_renew~.,data=validation_ds)[,-1]
+full_output<-validation_ds$did_renew
+
+full_validation_predictions<-predict(bst,sparse_full_validation_matrix)
+
+full_v_p<-as.numeric(full_validation_predictions>0.5)
+
+review<-full_ds%>%
+  mutate(month=month(EXPIRE_DATE),
+         ref_month=month(reference_date))%>%
+  mutate(year=year(EXPIRE_DATE),
+         ref_year=year(reference_date))%>%
+  filter(ref_year>=year)%>%
+  filter(ref_month>=month)%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  ungroup()%>%
+  mutate(renewal_diff=as.numeric(difftime(EXPIRE_DATE,RENEWAL_ORDER_DATE,units='days')))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE)|renewal_diff<(-30),0,1))
+
+review$pred<-full_v_p
+
+review%>%
+  mutate(outcome=ifelse(did_renew==1&pred==1,"TP",
+                        ifelse(did_renew==0&pred==0,"TN",
+                               ifelse(did_renew==0&pred==1,"FP","FN"))))%>%
+  group_by(month,outcome)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  spread(outcome,n)%>%
+  mutate(FN=as.double(FN),
+         FP=as.double(FP),
+         TN=as.double(TN),
+         TP=as.double(TP))%>%
+  mutate(total=FN+FP+TN+TP)%>%
+  mutate(accuracy=(FP+TP)/total,
+         sensitivity=(TP)/(TP+FN),
+         specificity=(TN)/(TN+FP),
+         F1=(2*TP)/(2*TP+FP+FN),
+         MCC_upper=(TP*TN-FP*FN),
+         MCC_bottom=sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN)),
+         MCC=MCC_upper/MCC_bottom)%>%
+  select(-c(MCC_upper,MCC_bottom))
+
+write.csv(validation_ds,"full_validation_ds.csv")
+
+
+validation_ds
+```
+
+```{r}
+```
+
+
+
+```{r}
+base_ds%>%
+  group_by(did_renew,PUB_CODE)%>%
+  summarise(n=n())
+
+renew_1_pub_code_an2<-base_ds%>%
+  filter(did_renew==1&PUB_CODE=="AN2")
+
+renew_1_pub_code_an1<-base_ds%>%
+  filter(did_renew==1&PUB_CODE=="AN1")
+
+renew_1_an2_index<-sample(nrow(renew_1_pub_code_an2),180)
+renew_1_an1_index<-sample(nrow(renew_1_pub_code_an1),1300)
+
+renew_1_an2<-renew_1_pub_code_an2[renew_1_an2_index,]
+renew_1_an1<-renew_1_pub_code_an1[renew_1_an1_index,]
+
+non_sampled_ds<-base_ds%>%
+  mutate(remove=ifelse(did_renew==1&PUB_CODE%in%c("AN2","AN1"),1,0))%>%
+  filter(remove!=1)%>%
+  select(-remove)
+
+full_train_set<-rbind(non_sampled_ds,renew_1_an1)
+
+full_train_set<-rbind(full_train_set,renew_1_an2)
+
+ft<-full_train_set%>%
+  select(-id)
+
+
+train<-dummyVars("~.",data=ft)
+
+train<-data.frame(predict(train,newdata=ft))
+
+train
+
+trainSize <- round(0.80 * nrow(train))
+
+trainIndex <- sample(nrow(train), trainSize)
+trainDF <- train %>% dplyr::slice(trainIndex)
+testDF <- train %>% dplyr::slice(-trainIndex)
+
+
+trainDF
+sparse_matrix<-sparse.model.matrix(did_renew~.,data=trainDF)[,-1]
+train_matrix<-as.matrix(trainDF[,-1])
+output_vector<-trainDF$did_renew
+
+head(sparse_matrix)
+
+bst <- xgboost(data = sparse_matrix, label = output_vector, max_depth = 10,
+               eta = 0.3, nthread = 2, nrounds = 10,objective = "binary:logistic")
+
+importance <- xgb.importance(feature_names = colnames(sparse_matrix), model = bst)
+
+xgb.plot.importance(importance_matrix = importance)
+
+trainDF
+```
+
+```{r}
+c2 <- chisq.test(trainDF$total_non_articles, output_vector)
+
+sparse_matrix
+
+shap_long <- shap.prep(xgb_model = bst, X_train = train_matrix)
+
+shap_values <- shap.values(xgb_model = bst, X_train = sparse_matrix)
+
+shap.plot.summary(shap_long)
+```
+
+```{r}
+sparse_test_matrix<-sparse.model.matrix(did_renew~.,data=testDF)[,-1]
+
+testDF
+
+head(sparse_test_matrix)
+pred<-predict(bst,sparse_test_matrix)
+
+prediction <- as.numeric(pred > 0.5)
+
+testDF$pred<-prediction
+
+testDF%>%
+  group_by(did_renew,pred)%>%
+  summarise(n=n())
+
+confusionMatrix(as.factor(prediction),as.factor(testDF$did_renew))
+```
+
+```{r}
+validation_set<-full_ds%>%
+  filter(EXPIRE_DATE>=as.Date("2023-05-01",format="%Y-%m-%d"))%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  ungroup()%>%
+  select(did_renew,PUB_CODE,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,n_users,recency)
+
+
+
+validation<-dummyVars("~.",data=validation_set)
+
+validation<-data.frame(predict(validation,newdata=validation_set))
+
+sparse_validation_matrix<-sparse.model.matrix(did_renew~.,data=validation)[,-1]
+
+pred_valid<-predict(bst,sparse_validation_matrix)
+
+prediction_valid <- as.numeric(pred_valid > 0.5)
+
+validation$pred<-prediction_valid
+
+validation%>%
+  group_by(did_renew,pred)%>%
+  summarise(n=n())
+```
+
+```{r}
+confusionMatrix(as.factor(prediction_valid),as.factor(validation$did_renew))
+
+as.factor(validation$did_renew)
+```
+
+
+```{r}
+full_ds%>%
+  mutate(month=month(EXPIRE_DATE))%>%
+  group_by(month)%>%
+  summarise(n=n())
+
+full_validation_set<-full_ds%>%
+  mutate(id=paste(CUSTOMER_NUMBER,SUB_ID,sep="_"))%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  ungroup()%>%
+  select(did_renew,PUB_CODE,TERM_NUMBER,IS_AUTO_RENEW,total_articles,total_non_articles,total_visits,n_users,recency)
+
+full_validation_sets<-dummyVars("~.",data=full_validation_set)
+
+full_validation_set<-data.frame(predict(full_validation_sets,newdata=full_validation_set))
+
+full_validation_set
+
+sparse_full_validation_matrix<-sparse.model.matrix(did_renew~.,data=full_validation_set)[,-1]
+
+full_pred<-predict(bst,sparse_full_validation_matrix)
+
+full_pred<-as.numeric(full_pred>0.5)
+
+full_validation_set$pred<-full_pred
+
+full_ds$pred<-full_pred
+
+full_ds%>%
+  mutate(month=month(EXPIRE_DATE))%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  group_by(month,did_renew,pred)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(month)%>%
+  mutate(total=sum(n))%>%
+  summarise(accuracy=)
+```
+
+```{R}
+full_ds%>%
+  mutate(did_renew=ifelse(is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  group_by(has_online_activity,did_renew,IS_AUTO_RENEW)%>%
+  summarise(n=n())
+```
+
+
+
+
+

@@ -1,0 +1,116 @@
+---
+title: "model_training_portion"
+author: "Andrew Lin"
+date: "2024-01-22"
+output: html_document
+---
+```{r}
+feature_set<-chuh%>%
+  mutate(did_return=ifelse(is_former.y=="Did not Return",0,1))%>%
+  select(did_return,TERM_NUMBER,RATE,IS_AUTO_RENEW,is_former.y,business,promote_sub,promote_editorial,promote_events,promote_webinars,promote_thirdparty,total_articles,total_non_articles,total_article_visits,total_non_article_visits,recency)%>%
+  mutate(promote_sub=ifelse(is.na(promote_sub),0,promote_sub),
+         promote_editorial=ifelse(is.na(promote_editorial),0,promote_editorial),
+         promote_events=ifelse(is.na(promote_events),0,promote_events),
+         promote_webinars=ifelse(is.na(promote_webinars),0,promote_webinars),
+         promote_thirdparty=ifelse(is.na(promote_thirdparty),0,promote_thirdparty))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="N",0,1))%>%
+  mutate(business=as.factor(business))%>%
+  ungroup()%>%
+  select(-c(CUSTOMER_NUMBER,is_former.y))
+
+feature_set
+```
+
+```{r}
+mcc_eval<-function(preds,dtrain){
+  labels<-getinfo(dtrain,"label")
+  pred<-as.numeric(preds>0.5)
+  mcc_value<-mcc(pred,labels)
+  return(list(metric="MCC",value=mcc_value))
+}
+```
+
+
+```{r}
+set.seed(01231)
+one_hot<-dummyVars("~.",data=feature_set)
+one_hot_set<-data.frame(predict(one_hot,feature_set))
+
+one_hot_set
+
+index<-createDataPartition(feature_set$did_return,p=.8,list=F)
+train<-one_hot_set[index,]
+test<-one_hot_set[-index,]
+
+train_output<-train$did_return
+train_set<-sparse.model.matrix(did_return~.,train)[,-1]
+
+train_2<-as.matrix(train[,-1])
+
+test_set<-sparse.model.matrix(did_return~.,test)[,-1]
+
+base_xg_boost<-xgboost(data=train_set,label=train_output,max_depth=10,eta=0.4,nthread=2,nrounds=20,objective="binary:logistic",eval_metric=mcc_eval,scale_pos_weight=3.44)
+```
+```{r}
+predictions<-predict(base_xg_boost,test_set)
+pred<-as.numeric(predictions>0.5)
+
+confusionMatrix(as.factor(test$did_return),as.factor(pred))
+mcc(test$did_return,pred)
+```
+
+
+```{r}
+shap_long <- shap.prep(xgb_model = base_xg_boost, X_train = train_2)
+
+shap.plot.summary(shap_long)
+```
+
+
+```{r}
+train_2<-train%>%
+  select(-c(business.Other.Unknown,business.Retail.,business.Professional.Services.,business.Manufacturing.,promote_events,promote_webinars,promote_sub,promote_editorial))
+
+test_2<-test%>%
+  select(-c(business.Other.Unknown,business.Retail.,business.Professional.Services.,business.Manufacturing.,promote_events,promote_webinars,promote_sub,promote_editorial))
+
+
+
+train
+
+
+one_hot_set
+
+train_output<-train_2$did_return
+train_set_red<-sparse.model.matrix(did_return~.,train_2)[,-1]
+
+train_2<-as.matrix(train[,-1])
+train_red_2<-as.matrix(train_red[,-1])
+
+test_set_2<-sparse.model.matrix(did_return~.,test_2)[,-1]
+
+base_xg_boost_red<-xgboost(data=train_set_red,label=train_output,max_depth=10,eta=0.4,nthread=2,nrounds=20,objective="binary:logistic",eval_metric=mcc_eval,scale_pos_weight=3.44)
+
+
+
+```
+
+```{r}
+pred_red<-predict(base_xg_boost_red,test_set_2)
+predictions_red<-as.numeric(pred_red>0.5)
+
+confusionMatrix(as.factor(test$did_return),as.factor(predictions_red))
+
+mcc(test$did_return,predictions_red)
+```
+```{r,eval=FALSE}
+
+```
+
+
+
+
+
+
+
+

@@ -1,0 +1,990 @@
+---
+title: "Business Industries and Job Titles Across MH, CCB, and NHF (DAT-589)"
+author: "Andrew Lin"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+library(tidyverse)
+library(RPostgres)
+library(ggrepel)
+library(knitr)
+library(kableExtra)
+
+dev <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'dev',
+               sslmode='require')
+
+
+
+
+
+zinfo_mh<-dbGetQuery(dev,"select * from zoominfo.reporting.mv_tbl__customer_demographic_mhc_mv__0")
+
+clickshare_index<-dbGetQuery(dev,"select * from prod.reporting.customer_master_reference where businessunitcode='MH'")
+
+clickshare_index_test<-dbGetQuery(dev,"select * from prod.reporting.customer_master_reference where businessunitcode='MH' or businessunitcode='CCB' or businessunitcode='CNB'")
+
+pelcro_table<-dbGetQuery(dev,"select  * from prod.pelcro.subscription
+where ispaid is true
+and isagency is false
+and isindividual is true
+and (subscriptionstatus = 'active' or subscriptionstatus='past_due')
+and (businessunitcode='CNY' or businessunitcode='CCB')")
+
+pelcro_customer_metadata<-dbGetQuery(dev,"select * from prod.pelcro.customer_metadata where businessunitcode='CNY' or businessunitcode='CCB'")
+
+
+
+
+index<-clickshare_index%>%
+  select(clickshareuserid,advantagecustomerid)%>%
+  mutate(advantagecustomerid=as.numeric(advantagecustomerid))%>%
+  distinct()
+
+business_job_adv<-zinfo_mh%>%
+  select(clickshareuserid,busind,businddescription,jobfunction,jobfunctiondescription)%>%
+  distinct()
+
+cny_j_b<-read.csv("CNY_Job_Business_Index.csv")
+mh_j_b<-read.csv("MH_Job_Busines_Index.csv")
+
+cny_j<-cny_j_b%>%
+  filter(Code.1=="J")
+
+cny_b<-cny_j_b%>%
+  filter(Code.1=="B")
+
+
+
+mh_j<-mh_j_b%>%
+  mutate(ID=str_extract(Value,"\\((.*?)\\)"),
+         ID=str_replace(ID,"\\(|\\)", ""),
+         ID=as.numeric(str_replace(ID,"\\)","")))%>%
+  mutate(Value=str_replace(Value,"\\(.*?\\)",""))%>%
+  filter(Code=="B")%>%
+  mutate(ID=ifelse(Value=="SYS Integrator/Analyst",56,ID))%>%
+  mutate(ID=ifelse(Value=="Dir/Mgr/Chf Med Records",54,ID))
+
+mh_b<-mh_j_b%>%
+  filter(Code=="J")%>%
+  mutate(ID=str_extract(Value,"\\((.*?)\\)"),
+         ID=str_replace(ID,"\\(|\\)", ""),
+         ID=(str_replace(ID,"\\)","")))%>%
+  mutate(Value=str_replace(Value,"\\(.*?\\)",""))%>%
+  mutate(ID=ifelse(Value=="Dealers/Hospital/Equip/Services","DF",ID),
+         ID=ifelse(Value=="Physician Private Practice","DG",ID))%>%
+  mutate(ID=ifelse(ID=="other than in list","AG",ID))
+  
+
+ccb_bi<-read.csv("CCB_Job_Business_Index.csv")
+ccb_b<-ccb_bi%>%
+  filter(Code=="B")
+
+ccb_j<-ccb_bi%>%
+  filter(Code=="J")
+
+adv_data<-dbGetQuery(dev,"select distinct shiptocustomernumber from prod.reporting.AdvantageSubscriptionTerms Expire where Expire.TermType in ('P','C') and  Expire.SubscriptionClass = 'R' and Expire.OwningOrganizaion = 'MH' and Expire.DonorType='I' and expirationissuedate>=current_date")
+
+mh_totals<-nrow(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct())
+
+mh_b_other<-(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(Value=ifelse(str_detect(Value,"Other Healthcare"),"Other Healthcare Organization",Value))%>%
+  mutate(v_check=ifelse(Value=="unknown"|is.na(Value)|str_detect(Value,"Other Healthcare")|str_detect(Value,"Undefined"),0,1))%>%
+  mutate(Value=ifelse(Value=="unknown","Other Healthcare Organization",Value))%>%
+    mutate(max_v=max(v_check))%>%
+  filter(v_check==max_v)%>%
+  mutate(Value=ifelse(is.na(Value),"Other Healthcare Organization",Value))%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  ungroup()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber,na.rm=TRUE))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Business Industry`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=mh_totals)%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Business Industry`,`Active Customers`,`Total Subscribers`)%>%
+  filter(`Business Industry`=="Other Healthcare Organization"))$`Active Customers`
+
+mh_j_others<-(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  group_by(shiptocustomernumber)%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  mutate(jobfunction=as.numeric(jobfunction))%>%
+  mutate(jobfunction=ifelse(is.na(jobfunction),99,jobfunction))%>%
+  left_join(mh_j,by=c("jobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(min_job=min(jobfunction))%>%
+  filter(jobfunction==min_job)%>%
+  ungroup()%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Job Title`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Job Title`,`Active Customers`)%>%
+  filter(str_detect(`Job Title`,"Other hospital")))$`Active Customers`
+
+ccb_totals<-nrow(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct())
+
+ccb_pelcro_business_index<-pelcro_customer_metadata%>%
+  filter(businessunitcode=="CCB")%>%
+  select(metadatacrainbusinessindustry,metadataccbindustry)%>%
+  group_by(metadatacrainbusinessindustry)%>%
+  mutate(b_check=ifelse(is.na(metadataccbindustry),0,1))%>%
+  mutate(max_b=max(b_check))%>%
+  filter(b_check==max_b)%>%
+  select(-b_check)%>%
+  distinct()
+
+pelcro_customer_data<-pelcro_customer_metadata%>%
+  select(customeraccountid,metadatacrainbusinessindustry)%>%
+  distinct()
+
+
+ccb_b_other_counts<-(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Others Allied to the Field",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  mutate(total=ccb_totals)%>%
+  filter(`Business Industry`=="Others Allied to the Field"))$`Active Customers`
+
+ccb_pelcro_job_index<-pelcro_customer_metadata%>%
+  filter(businessunitcode=="CCB")%>%
+  select(metadatacrainjobfunction,metadataccbjobtitle)%>%
+  group_by(metadatacrainjobfunction)%>%
+  mutate(j_check=ifelse(is.na(metadataccbjobtitle),0,1))%>%
+  mutate(max_j=max(j_check))%>%
+  filter(j_check==max_j)%>%
+  select(-j_check)%>%
+  distinct()
+    
+
+pelcro_customer_data_j<-pelcro_customer_metadata%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()
+
+ccb_j_other<-(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  left_join(ccb_pelcro_job_index,by=c("metadatacrainjobfunction"="metadatacrainjobfunction"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()%>%
+  left_join(ccb_j,by=c("metadatacrainjobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Misc titles including Government",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(total=ccb_totals)%>%
+  top_n(10,n)%>%
+  mutate(`Job Title`=Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  select(`Job Title`,`Active Customers`,total)%>%
+    filter(str_detect(`Job Title`,"Misc titles including")))$`Active Customers`
+
+cny_totals<-nrow(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct())
+
+
+pelcro_customer_data_b<-pelcro_customer_metadata%>%
+  select(customeraccountid,metadatacrainbusinessindustry)%>%
+  distinct()
+
+cny_b_other<-(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Other",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(total=nrow(cny_totals))%>%
+  filter(Value=="Other"))$n
+
+cny_j_other<-(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  left_join(cny_j,by=c("metadatacrainjobfunction"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  separate(Value,into=c("Value","Value_2"),sep="-")%>%
+  select(Value,n)%>%
+  mutate(total=nrow(cny_totals))%>%
+  filter(Value=="Unknown"))$n
+  
+pelcro_customer_data_j<-pelcro_customer_metadata%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()
+```
+
+
+
+
+# Modern Healthcare
+
+## Businesses Industries
+
+There are currently `r mh_totals` distinct active individual MH customers, of which `r mh_b_other` customers have a business description of other, unknown, Comp-Misc, or Comp-Sample.Ignoring the unknown individuals, the top 10 business industry distribution is as follows:
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.width=9}
+
+mh_business_list<-(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(v_check=ifelse(Value=="unknown"|is.na(Value),0,1))%>%
+  mutate(max_v=max(v_check,na.rm=TRUE))%>%
+  filter(v_check==max_v)%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber,na.rm=TRUE))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Business Industry`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  filter(!str_detect(`Business Industry`,"Other Healthcare")&!str_detect(`Business Industry`,'unknown'))%>%
+  top_n(5,`Active Customers`))$`Business Industry`
+
+adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(v_check=ifelse(Value=="unknown"|is.na(Value),0,1))%>%
+  mutate(max_v=max(v_check,na.rm=TRUE))%>%
+  filter(v_check==max_v)%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber,na.rm=TRUE))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Business Industry`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  select(`Business Industry`,`Active Customers`,`Total Subscribers`)%>%
+  filter(!str_detect(`Business Industry`,"Other Healthcare")&!str_detect(`Business Industry`,'unknown'))%>%
+    top_n(10,`Active Customers`)%>%
+  ggplot(aes(reorder(`Business Industry`,`Active Customers`),`Active Customers`,label=`Active Customers`))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=3)+theme_minimal()+xlab("Business Industry")+ylab("Count of Active Customers")+labs(title="Top 10 MH Business Industries")
+```
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+knitr::kable(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(Value=ifelse(str_detect(Value,"Other Healthcare"),"Other Healthcare Organization",Value))%>%
+  mutate(v_check=ifelse(Value=="unknown"|is.na(Value)|str_detect(Value,"Other Healthcare")|str_detect(Value,"Undefined"),0,1))%>%
+  mutate(Value=ifelse(Value=="unknown","Other Healthcare Organization",Value))%>%
+  mutate(max_v=max(v_check))%>%
+  filter(v_check==max_v)%>%
+  mutate(Value=ifelse(is.na(Value),"Other Healthcare Organization",Value))%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  ungroup()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber,na.rm=TRUE))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Business Industry`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=mh_totals)%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Business Industry`,`Active Customers`,`Total Subscribers`)%>%
+  mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+```
+
+
+## Job Titles
+
+With regards to Job Titles, around `r mh_j_others` have missing or other job titles. CEOs and other higher-level executives tend to make up the larger portion of subscriber jobs.
+
+```{r,warning=FALSE,echo=FALSE,message=FALSE,fig.width=9}
+adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  group_by(shiptocustomernumber)%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  mutate(jobfunction=as.numeric(jobfunction))%>%
+  mutate(jobfunction=ifelse(is.na(jobfunction),99,jobfunction))%>%
+  left_join(mh_j,by=c("jobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(min_job=min(jobfunction))%>%
+  filter(jobfunction==min_job)%>%
+  ungroup()%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Job Title`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Job Title`,`Active Customers`)%>%
+  filter(!str_detect(`Job Title`,'Other hospital/healthcare executives not listed above'))%>%
+  top_n(10,`Active Customers`)%>%
+  ggplot(aes(reorder(`Job Title`,`Active Customers`),`Active Customers`,label=`Active Customers`))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=3)+theme_minimal()+xlab("Job Title")+ylab("Count of Active Customers")+labs(title="Top 10 MH Job Titles")
+```
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+knitr::kable(adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  group_by(shiptocustomernumber)%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  mutate(jobfunction=as.numeric(jobfunction))%>%
+  mutate(jobfunction=ifelse(is.na(jobfunction),99,jobfunction))%>%
+  left_join(mh_j,by=c("jobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(min_job=min(jobfunction))%>%
+  filter(jobfunction==min_job)%>%
+  ungroup()%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Job Title`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Job Title`,`Active Customers`)%>%
+  mutate(`Total Subscribers`=mh_totals)%>%
+  mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+```
+
+## Job Positions by Business
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.width=10,fig.height=7}
+adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  group_by(shiptocustomernumber)%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  mutate(jobfunction=as.numeric(jobfunction))%>%
+  mutate(jobfunction=ifelse(is.na(jobfunction),99,jobfunction))%>%
+  left_join(mh_j,by=c("jobfunction"="ID"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  select(shiptocustomernumber,jobfunction,busind,Value.x,Value.y)%>%
+  distinct()%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(job_value=Value.x)%>%
+  mutate(business=Value.y)%>%
+  mutate(business=ifelse(str_detect(business,"Other Health")|business=="Undefined","Other Healthcare Organization",business))%>%
+  mutate(business=ifelse(is.na(business),"Other Healthcare Organization",business))%>%
+  mutate(business_value=ifelse(str_detect(business,"Other Health"),0,1))%>%
+  mutate(min_job=min(jobfunction))%>%
+  mutate(max_bus=max(business_value))%>%
+  filter(jobfunction==min_job)%>%
+  filter(business_value==max_bus)%>%
+  select(shiptocustomernumber,business,job_value)%>%
+  distinct()%>%
+  filter(!str_detect(job_value,"Other hospital"))%>%
+  group_by(business,job_value)%>%
+  summarise(n=n_distinct(shiptocustomernumber))%>%
+  ungroup()%>%
+  group_by(business)%>%
+  arrange(desc(n))%>%
+  mutate(total_users=sum(n))%>%
+  mutate(share_of_users=round(n/total_users,3)*100)%>%
+  slice(1:5)%>%
+  filter(business%in%mh_business_list)%>%
+  mutate(`Job Title`=job_value)%>%
+  ggplot(aes(reorder(business,total_users),share_of_users,fill=`Job Title`,label=share_of_users))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()+geom_text(position=position_dodge(width=0.9),hjust=-0.2,size=2.5)+xlab("Business Industry")+ylab("Share of Users with Identified Job")+labs(title="Share of Top Positions across Industry Excluding Unidentified Businesses and Jobs")
+```
+
+
+
+
+
+
+# CCB Health Pulse
+
+## Business Industries
+
+For CCB Health Pulse users, out of the `r ccb_totals` active customers, there are `r ccb_b_other_counts` users that have an un-identified business. Compared to MH, healthcare-related business only encompass around 4% of total active subscribers. The business distribution is as follows:
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.width=9}
+pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Others Allied to the Field",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  mutate(total=ccb_totals)%>%
+  filter(`Business Industry`!="Others Allied to the Field")%>%
+  top_n(9,`Active Customers`)%>%
+  ggplot(aes(reorder(`Business Industry`,`Active Customers`),`Active Customers`,label=`Active Customers`))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Business Industry")+ylab("Count of Active Customers")+labs(title="Top 10 CCB Health Pulse Business Industries")
+```
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+ccb_top_business<-(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Others Allied to the Field",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  mutate(`Total Subscribers`=ccb_totals)%>%
+  filter(!str_detect(`Business Industry`,"Others Allied"))%>%
+  top_n(5,`Active Customers`))$`Business Industry`
+
+knitr::kable(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Others Allied to the Field",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  mutate(`Total Subscribers`=ccb_totals)%>%
+  top_n(10,`Active Customers`)%>%
+  mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+  
+```
+
+## Job Titles
+
+Out of `r ccb_totals` active , `r ccb_j_other` do not have a job title or are categorized as unknown. The remaining job titles are distributed as such:
+
+
+
+```{r,warning=FALSE,echo=FALSE,message=FALSE}
+knitr::kable(pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()%>%
+  group_by(customeraccountid)%>%
+  summarise(jobid=min(metadatacrainjobfunction,na.rm=TRUE))%>%
+  mutate(jobid=ifelse(is.infinite(jobid)|jobid==99|jobid==89,80,jobid))%>%
+  left_join(ccb_j,by=c("jobid"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Misc titles including Government",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Total Subscribers`=ccb_totals)%>%
+  top_n(10,n)%>%
+  mutate(`Job Title`=Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  select(`Job Title`,`Active Customers`,`Total Subscribers`)%>%
+   mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+```
+
+
+```{r,fig.width=11,warning=FALSE,echo=FALSE}
+pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()%>%
+  left_join(ccb_j,by=c("metadatacrainjobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Misc titles including Government",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(total=ccb_totals)%>%
+  top_n(10,n)%>%
+  mutate(`Job Title`=Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  select(`Job Title`,`Active Customers`,total)%>%
+  filter(!str_detect(`Job Title`,"Misc titles including"))%>%
+  top_n(10,`Active Customers`)%>%
+  ggplot(aes(reorder(`Job Title`,`Active Customers`),`Active Customers`,label=`Active Customers`))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Business Industry")+ylab("Count of Active Customers")+labs(title="Top 10 CCB Health Pulse Job Titles")
+```
+
+# Jobs Positions by Business
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.width=10,fig.height=7}
+pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  group_by(customeraccountid)%>%
+  left_join(ccb_j,by=c("metadatacrainjobfunction"="ID"))%>%
+  mutate(job=ifelse(is.na(Value),"Misc titles including Government",Value))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(business=ifelse(is.na(Value.y),"Others Allied to the Field",Value.y))%>%
+  filter(!str_detect(job,"Others Allied to"))%>%
+  group_by(business,job)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n),.by_group=TRUE)%>%
+  mutate(total=sum(n))%>%
+  slice(1:5)%>%
+  filter(business%in%ccb_top_business)%>%
+  mutate(`Job Title`=job)%>%
+  ggplot(aes(reorder(business,total),n,fill=`Job Title`,label=n))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()+geom_text(position=position_dodge(width=0.9),hjust=-0.2,size=2.5)+xlab("Business Industry")+ylab("Count of Customers")+labs(title="Count of Jobs Across Industry Excluding Unidentified Businesses and Jobs")
+  
+  
+```
+
+
+
+
+# CNY Healthpulse
+
+## Business Industries
+
+Out of `r cny_totals` active users, `r cny_b_other` are categorized as unknown wrt their business industry. The remaining distribution follows:
+
+```{r,echo=FALSE,warning=FALSE}
+cny_top_business<-(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Other",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  filter(Value!="Other")%>%
+  top_n(5,n))$Value
+
+
+pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Other",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  filter(Value!="Other")%>%
+  top_n(10,n)%>%
+  ggplot(aes(reorder(Value,n),n,label=n))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Business Industry")+ylab("Count of Active Customers")+labs(title="Top 10 CNY Health Pulse Businesses")
+  
+```
+
+```{r,warning=FALSE,echo=FALSE}
+knitr::kable(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Other",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(total=nrow(cny_totals))%>%
+  top_n(10,n)%>%
+  mutate(`Business Industry`=Value,
+         `Active Customers`=n,
+         `Total Subscribers`=cny_totals)%>%
+  select(`Business Industry`,`Active Customers`,`Total Subscribers`)%>%
+   mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+```
+
+## Job Titles
+
+Around `r cny_j_other` of those active users do not have information regarding their job title. The others follow this distribution:
+
+
+```{r,echo=FALSE,warning=FALSE,fig.width=9,message=FALSE}
+pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  left_join(cny_j,by=c("metadatacrainjobfunction"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  separate(Value,into=c("Value","Value_2"),sep="-")%>%
+  select(Value,n)%>%
+  mutate(total=nrow(cny_totals))%>%
+  filter(Value!="Unknown"&Value!="Other Miscellaneous Titles")%>%
+  top_n(10,n)%>%
+  ggplot(aes(reorder(Value,n),n,label=n))+geom_bar(stat="identity",position="dodge",fill="pink")+coord_flip()+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Business Industry")+ylab("Count of Active Customers")+labs(title="Top 10 CNY Health Pulse Job Titles")
+```
+
+
+
+```{r,echo=FALSE,warning=FALSE}
+
+knitr::kable(pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  left_join(cny_j,by=c("metadatacrainjobfunction"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  separate(Value,into=c("Value","Value_2"),sep="-")%>%
+  select(Value,n)%>%
+  mutate(total=cny_totals)%>%
+  mutate(`Job Title`=Value,
+         `Active Customers`=n,
+         `Total Subscribers`=total)%>%
+  select(`Job Title`,`Active Customers`,`Total Subscribers`)%>%
+  top_n(10,`Active Customers`)%>%
+  mutate(`Share of Total Customers`=(round(`Active Customers`/`Total Subscribers`*100,2))))
+```
+
+
+## Job Positions by Business
+
+```{r,fig.width=10,fig.height=7,message=FALSE,echo=FALSE,warning=FALSE}
+pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_j,by=c("metadatacrainjobfunction"="Code"))%>%
+  mutate(job=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Unknown",Value))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(business=Value.y)%>%
+  mutate(job=ifelse(is.na(job)|str_detect(job,"Others Allied"),"Unknown",job))%>%
+  mutate(business=ifelse(is.na(business)|str_detect(business,"Others Allied"),"Other",business))%>%
+  separate(job,into=c("job","job_2"),sep="-")%>%
+  filter(job!="Unknown")%>%
+  group_by(business,job)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  mutate(total=sum(n))%>%
+  filter(business%in%cny_top_business)%>%
+  slice(1:5)%>%
+  mutate(share=round(n/total,3)*100)%>%
+  mutate(`Job Title`=job)%>%
+  ggplot(aes(reorder(business,total),n,fill=job,label=n))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()+geom_text(position=position_dodge(width=0.9),hjust=-0.2,size=2.5)+xlab("Business Industry")+ylab("Share of Job Titles")+labs(title="Share of Jobs Across Industry Excluding Unidentified Businesses and Jobs")
+  
+```
+
+
+
+
+
+# Share of active and identified (non-other / Unknown Job Title) Job Titles across Publication
+
+
+```{r,warning=FALSE,echo=FALSE,fig.height=10,fig.width=20}
+cny_job_percent<-pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  left_join(cny_j,by=c("metadatacrainjobfunction"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  separate(Value,into=c("Value","Value_2"),sep="-")%>%
+  select(Value,n)%>%
+  mutate(total=nrow(cny_totals))%>%
+  filter(Value!="Unknown"&Value!="Other Miscellaneous Titles")%>%
+  top_n(5,n)%>%
+  mutate(Brand="CNY Health Pulse")%>%
+  mutate(`Job Title`=Value)%>%
+  mutate(`Active Customers`=n)%>%
+  mutate(`Total Customers`=cny_totals-cny_j_other)%>%
+  select(-c(Value,n))%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+
+ccb_job_percent<-pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  select(customeraccountid,metadatacrainjobfunction)%>%
+  distinct()%>%
+  group_by(customeraccountid)%>%
+  left_join(ccb_j,by=c("metadatacrainjobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Misc titles including Government",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Total Customers`=ccb_totals-ccb_j_other)%>%
+  top_n(10,n)%>%
+  mutate(Brand="CCB Health Pulse")%>%
+  mutate(`Job Title`=Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  select(Brand,`Job Title`,`Active Customers`,`Total Customers`)%>%
+  filter(!str_detect(`Job Title`,"Misc titles including"))%>%
+  top_n(5,`Active Customers`)%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+  
+MH_job_percent<-adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  group_by(shiptocustomernumber)%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  mutate(jobfunction=as.numeric(jobfunction))%>%
+  mutate(jobfunction=ifelse(is.na(jobfunction),99,jobfunction))%>%
+  left_join(mh_j,by=c("jobfunction"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(min_job=min(jobfunction))%>%
+  filter(jobfunction==min_job)%>%
+  ungroup()%>%
+  select(shiptocustomernumber,Value)%>%
+  distinct()%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Job Title`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  top_n(10,`Active Customers`)%>%
+  mutate(Brand="MH")%>%
+  select(Brand,`Job Title`,`Active Customers`)%>%
+  filter(!str_detect(`Job Title`,'Other hospital/healthcare executives not listed above'))%>%
+  top_n(5,`Active Customers`)%>%
+  mutate(`Total Customers`=mh_totals-mh_j_others)%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+
+j_p_bind<-rbind(cny_job_percent,ccb_job_percent,MH_job_percent)
+
+j_p_bind%>%
+  ggplot(aes(reorder(`Job Title`,`Share of Customers`),`Share of Customers`,label=`Share of Customers`,fill=Brand))+geom_bar(position="dodge",stat="identity")+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Job Title")+ylab("Share of Active Non-Other Customers")+labs(title="Share of Job Titles Across Brands")+facet_grid(~Brand,space="free_x")+coord_flip()
+```
+
+
+# Share of active and identified (non-other / Unknown Business Industries) Business Industries across Publication
+
+```{r,warning=FALSE,echo=FALSE,fig.height=10,fig.width=20}
+cny_business_percent<-pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_b,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_b,by=c("metadatacrainbusinessindustry"="Code"))%>%
+  mutate(Value=ifelse(is.na(Value)|str_detect(Value,"Others Allied"),"Other",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  filter(Value!="Other")%>%
+  top_n(5,n)%>%
+  mutate(Brand="CNY Health Pulse")%>%
+  mutate(`Business Industry`=Value)%>%
+  mutate(`Active Customers`=n)%>%
+  mutate(`Total Customers`=cny_totals-cny_b_other)%>%
+  select(-c(Value,n))%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+
+ccb_business_percent<-pelcro_table%>%
+  select(customeraccountid,businessunitcode,productname)%>%
+  filter(businessunitcode=="CCB")%>%
+  filter(str_detect(productname,"Health"))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c("customeraccountid"="customeraccountid"))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c("metadatacrainbusinessindustry"="ID"))%>%
+  mutate(Value=ifelse(is.na(Value),"Others Allied to the Field",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  mutate(`Total Customers`=ccb_totals-ccb_b_other_counts)%>%
+  filter(`Business Industry`!="Others Allied to the Field")%>%
+  top_n(10,`Active Customers`)%>%
+  mutate(Brand="CCB Health Pulse")%>%
+  select(Brand,`Business Industry`,`Active Customers`,`Total Customers`)%>%
+  top_n(5,`Active Customers`)%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+  
+MH_business_percent<-adv_data%>%
+  select(shiptocustomernumber)%>%
+  distinct()%>%
+  left_join(index,by=c("shiptocustomernumber"="advantagecustomerid"))%>%
+  mutate(clickshareuserid=as.numeric(clickshareuserid))%>%
+  left_join(business_job_adv,by=c("clickshareuserid"="clickshareuserid"))%>%
+  left_join(mh_b,by=c("busind"="ID"))%>%
+  group_by(shiptocustomernumber)%>%
+  mutate(v_check=ifelse(Value=="unknown"|is.na(Value),0,1))%>%
+  mutate(max_v=max(v_check,na.rm=TRUE))%>%
+  filter(v_check==max_v)%>%
+  mutate(Value=ifelse(is.na(Value),"unknown",Value))%>%
+  group_by(Value)%>%
+  summarise(`Active Customers`=n_distinct(shiptocustomernumber,na.rm=TRUE))%>%
+  arrange(desc(`Active Customers`))%>%
+  ungroup()%>%
+  mutate(`Business Industry`=Value)%>%
+  select(-Value)%>%
+  mutate(`Total Subscribers`=sum(`Active Customers`))%>%
+  top_n(10,`Active Customers`)%>%
+  select(`Business Industry`,`Active Customers`,`Total Subscribers`)%>%
+  filter(`Business Industry`!='unknown'&!str_detect(`Business Industry`,"Other Health"))%>%
+    top_n(10,`Active Customers`)%>%
+  mutate(Brand="MH")%>%
+  select(Brand,`Business Industry`,`Active Customers`)%>%
+  top_n(5,`Active Customers`)%>%
+  mutate(`Total Customers`=mh_totals-mh_b_other)%>%
+  mutate(`Share of Customers`=round(`Active Customers`/`Total Customers`,3)*100)
+
+j_p_bind<-rbind(cny_business_percent,ccb_business_percent,MH_business_percent)
+
+j_p_bind%>%
+  ggplot(aes(reorder(`Business Industry`,`Share of Customers`),`Share of Customers`,label=`Share of Customers`,fill=Brand))+geom_bar(position="dodge",stat="identity")+geom_text(position="dodge",hjust=-0.1,size=2.5)+theme_minimal()+xlab("Business Industry")+ylab("Share of Active Non-Other Customers")+labs(title="Share of Business Industries Across Brands")+facet_grid(~Brand,space="free_x")+coord_flip()
+```
+
+# Concluding Thoughts
+
+While a majority of MH, CCB, and NHF subscribers had missing or unknown job titles, it's clear that across brands, higher-level positions like CEO, President, etc. tend to make up the largest proportion of non-missing job titles. In fact, outside of CNY Health Pulse, no other brand has healthcare professional as a listed job title.
+
+MH, CCB Health Pulse, and NHF both have high proportions of users that work in a healthcare-related organization. Furthermore, consultant-related industries appear to occupy a substantial portion for all three brands as well. Other than those similarities, CCB and NHF splinters off with non-health related industries while MH is still focused on health-related industries. When choosing to offer discounts or trials for MH, it's clear that targeting NHF and CCB Health Pulse individuals that belong to upper manage and work within a consultation or hospital related organization may provide a higher chance of success.
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,28 @@
+"0","ccb_b_other_counts<-(pelcro_table%>%
+  select(customeraccountid,businessunitcode)%>%
+  filter(businessunitcode==""CCB"")%>%
+  filter(str_detect(productname,""Health""))%>%
+  distinct()%>%
+  left_join(pelcro_customer_data,by=c(""customeraccountid""=""customeraccountid""))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(ccb_b,by=c(""metadatacrainbusinessindustry""=""ID""))%>%
+  mutate(Value=ifelse(is.na(Value),""Others Allied to the Field"",Value))%>%
+  group_by(Value)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  arrange(desc(n))%>%
+  mutate(`Business Industry`= Value,
+         `Active Customers`=n)%>%
+  select(-c(Value,n))%>%
+  mutate(total=ccb_totals)%>%
+  filter(`Business Industry`==""Others Allied to the Field""))$`Active Customers`
+"
+"1","[1m[33mError[39m in `filter()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `str_detect(productname, ""Health"")`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'productname' not found
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m 21. [39m[1mstringr[22m::str_detect(productname, ""Health"")
+[90m 22. [39mstringr:::check_lengths(string, pattern)
+[90m 23. [39m[1mvctrs[22m::vec_size_common(...)
+"

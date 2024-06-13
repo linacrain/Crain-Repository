@@ -1,0 +1,52 @@
+﻿ID,Value,Code
+01,Chairman/Pres/COO/CEO/Partner,J
+19,Assistants to title above 01,J
+20,Exec VP/Sr VP/GM/Vice Chairman/Executive Directors,J
+29,Assistants to title code 20,J
+30,CFO/Treasurer/Controller/CPA,J
+39,Assistants to Title code 030,J
+40,All other VP/Corp Directors and Managers/Managing Directors,J
+49,Assistants to title code 40,J
+50,Managers/Directors/Coordinators,J
+59,Assistants to title code 50,J
+60,All Sales Directors/Sales Managers/Account Managers,J
+69,Assistants to title code 60,J
+70,Professionals - Attorneys/Engineers/Architects/Editors/Consultants/etc.),J
+79,Assistants to title code 70,J
+80,Misc titles including Government,J
+05,Educators/Students/Libraries/Schools,B
+06,Others Allied to the Field,B
+07,Retired,B
+08,Homemaker,B
+09,Unemployed,B
+10,Mfg/Printing/Publishing,B
+20,Wholesale Trade/Distribution/Import-Export,B
+30,Retail Trade/Restaurants,B
+40,Other Business Services,B
+41,Health Care Svcs/Health Associations,B
+42,Legal Services/Legal Associations,B
+43,Accounting Services,B
+44,Engineering/Research & Dev Svcs,B
+45,Consulting Services,B
+46,Advertising/Marketing/Promotion/PR,B
+47,Employment Services,B
+48,Architectural Services,B
+49,Social Services,B
+50,Transportation/Logistics,B
+51,Communication  - Not Media,B
+52,"Utilities (Electric/Gas/Waste/Recycling, etc)",B
+53,Lodging/Hospitality,B
+54,Computer/Data Processing services,B
+55,Media (Radio/TV/Newspapers/Magazines),B
+56,Computer/Peripheral Equip Mfg,B
+57,Internet/Online Services,B
+58,Software Design/Development,B
+59,Non-Profit,B
+60,Banking/Finance/Brokerage,B
+61,Insurance,B
+62,Real Estate,B
+70,Construction,B
+80,Government,B
+90,Agriculture/Forestry/Fisheries/Landscaping,B
+92,Armed Forces,B
+95,Mining,B

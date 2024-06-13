@@ -1,0 +1,28 @@
+"0","pelcro_table%>%
+  filter(businessunitcode==""CNY"")%>%
+  filter(productname=='Health Pulse')%>%
+  select(customeraccountid)%>%
+  distinct()%>%
+  left_join(pelcro_customer_data_j,by=c(""customeraccountid""=""customeraccountid""))%>%
+  left_join(pelcro_customer_data_b,by=c(""customeraccountid""=""customeraccountid""))%>%
+  mutate(metadatacrainjobfunction=as.numeric(metadatacrainjobfunction))%>%
+  mutate(metadatacrainbusinessindustry=as.numeric(metadatacrainbusinessindustry))%>%
+  left_join(cny_j,by=c(""metadatacrainjobfunction""=""Code""))%>%
+  mutate(job=ifelse(is.na(Value)|str_detect(Value,""Others Allied""),""Unknown"",Value))%>%
+  left_join(cny_b,by=c(""metadatacrainbusinessindustry""=""Code""))%>%
+  mutate(business=Value.y)%>%
+  mutate(job=ifelse(is.na(job)|str_detect(job,""Others Allied""),""Unknown"",job))%>%
+  mutate(business=ifelse(is.na(business)|str_detect(business,""Others Allied""),""Other"",business))%>%
+  separate(job,into=c(""job"",""job_2""),sep=""-"")%>%
+  filter(job!=""Unknown"")%>%
+  group_by(business,job)%>%
+  summarise(n=n_distinct(customeraccountid))%>%
+  mutate(total=sum(n))%>%
+  filter(business%in%cny_top_business)%>%
+  slice(1:5)%>%
+  mutate(share=round(n/total,3)*100)%>%
+  mutate(`Job Title`=job)%>%
+  ggplot(aes(reorder(business,total),n,fill=job,label=n))+geom_bar(stat=""identity"",position=""dodge"")+theme_minimal()+coord_flip()+geom_text(position=position_dodge(width=0.9),hjust=-0.2,size=2.5)+xlab(""Business Industry"")+ylab(""Share of Job Titles"")+labs(title=""Share of Jobs Across Industry Excluding Unidentified Businesses and Jobs"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'business'. You can override using the `.groups` argument.[39m
+"

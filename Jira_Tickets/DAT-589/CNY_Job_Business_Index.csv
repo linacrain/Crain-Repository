@@ -1,0 +1,60 @@
+﻿Code,Value,Code
+6,Others Allied  (Please Specify),B
+10,Manufacturing/Industrial Equipment Co.,B
+11,Media,B
+12,Insurance Company,B
+13,Insurance Broker,B
+14,Banking/Finance/Payments ,B
+15,Securities Brokerage/Asset Management,B
+17,"Technology (Search Engine, Software, Hardware) Co.",B
+18,"Digital Technology (Social Media, Web 2.0, Content Distribution)",B
+20,Wholesale Trade/Distribution/Import/Export Co.,B
+30,Retail/E-Commerce Co.,B
+31,"Hospitality (Restaurants, Hotels, Event Venues, Meeting/Event Planning, Tourism) Co.",B
+32,"Entertainment (Theater, Sports Teams, etc.) Co.",B
+40,Business Services Co. ,B
+41,Accounting Services Firm,B
+42,Ad Agencies/Marketing/Public Relations Co.,B
+43,Education,B
+44,Executive Search and Staffing Co.,B
+45,Law Firm,B
+46,Hospitals and Health Care ,B
+47,Pharmaceutical Co.,B
+48,Physicians Group,B
+49,"Non-Profits (Arts, Culture, Charity) Org.",B
+50,Transportation/Logistical Services Co.,B
+51,Telecommunications Co.,B
+52,Energy/Utilities,B
+62,R.E.I.T./Property Owner/Manager,B
+63,Real Estate Developer,B
+64,Real Estate Brokerage - Commercial,B
+65,Real Estate Brokerage - Residential,B
+70,Construction Co.,B
+71,Contractor Co.,B
+72,Architectural Firm,B
+73,Consulting Services Firm,B
+80,"Government/Social Services (municipal, state, federal)",B
+81,Labor Union,B
+82,Lobbyist,B
+1,"CORPORATE MANAGEMENT - Addictional: Chairman,CEO,CFO,COO, Owner, President, Partner, Treasurer, VP Esquire, Executive Director,General Manager, Publisher",J
+19,Assistant to Corporate Management,J
+20,"FINANCIAL MANAGEMENT - Additional: Budget Director, Controller, Director or Manager of Finance, Audit Manager, Trust Officer, CPA",J
+29,Assistant to Financial Management,J
+30,"OPERATING MANAGEMENT - Additional: Operations Manager or Director, Office Manager, Engineer, Personnel Director or Manager, Principal, Supervisor, Other Misc. Corporate Titles",J
+39,Assistant to Operations Management,J
+40,"COMPUTER/SYSTEMS MANAGEMENT - Additional: EDP Chief, Director or Manager of Programming, System & Procedure Director or Manager",J
+49,Assistant to Computer Systems Mgmt,J
+50,"PURCHASING - Additional: Purchasing Director or Manager, Agent, Buyer",J
+59,Assistant to Purchasing Management,J
+60,"MARKETING/SALES - Additional: Director or Manager of Advertising, Communications, Marketing, Promotions or Sales, Account Executive, Sales Rep",J
+69,Assistant to Marketing or Sales Mgmt,J
+70,"Other Professional - Additional: Accountant, Architect, other",J
+71,Broker,J
+72,Consulting Professional - Additional: Consultant,J
+73,"Healthcare Professional - Additional: MD, DDS, DO, Misc. Medical Title",J
+74,Legal Professional - Additional: Attorney/Lawyer,J
+75,"Professor, Teacher or Clergy",J
+79,Assistant to Professionals,J
+80,Other Miscellaneous Titles,J
+89,Non-Titled,J
+99,Company & Library Copies,J

@@ -1,0 +1,1494 @@
+---
+title: "Findings Sheet"
+author: "Andrew Lin"
+date: "2024-02-14"
+output: html_document
+---
+
+What behaviors do AN1 customers exhibit when they are going to churn?
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Are churned users more inactive compared to renewed users?
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  group_by(did_churn,was_active)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop_inactive=round(n/total*100))%>%
+  filter(was_active==0)
+```
+```{r}
+prop.test(c(606,231),c(2087,585),alt="l")
+```
+Churned first-time users for AN1 have a higher proportion of inactive users.
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  group_by(did_churn,was_active,IS_AUTO_RENEW)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  filter(was_active==0)
+```
+
+When splitting inactive users by auto-renew status, we notice that the majority of churned inactive users had auto-renew off while the majority of renewed inactive users have auto-renew on. When looking at AN1 customers without online activity, Auto-renew seems to be a strong indicator of churn possibility.
+
+Can we split up our inactive base by business?
+
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  group_by(did_churn,was_active,IS_AUTO_RENEW,business)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100))%>%
+  group_by(did_churn)%>%
+  arrange(desc(prop),.by_group=TRUE)%>%
+  top_n(5,prop)
+```
+When split by business, activity, and auto-renew, the top 5 shares of renewed users all have auto-renew on. The largest share of renewed users are active Retail users with auto-renew on (30% of population).
+
+Churned users primarily have auto-renew off. The largest share of churned users were active Professional Service users without Auto-Renew (25% of population). While churned users may be more inactive, inactivity does not dictate whether or not a user would churn-- it seems that the combination of inactivity with auto-renew is a strong indicator of churn.
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,business,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn,business)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  group_by(did_churn,business)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100))%>%
+  group_by(did_churn)%>%
+  arrange(desc(prop),.by_group=TRUE)
+```
+
+When splitting by business, we find that renewed users have more retail users compared to churned users while churned users have more professional service users compared to renewed users.
+
+What about active users?
+
+```{r}
+list_of_active_AN1_users<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  filter(was_active==1)
+
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_visits=mean(total_visits,na.rm=TRUE))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_visits,digits=1)))+labs(title="AN1 First Time Users Avg. visits per Month by Churn Status")+xlab("Contract Month")
+```
+```{r}
+list_of_active_AN1_users<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  filter(was_active==1)
+
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,articles)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_articles,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_visits=mean(total_articles,na.rm=TRUE))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_visits,digits=1)))+labs(title="AN1 First Time Users Avg. articles per Month by Churn Status")+xlab("Contract Month")+ylab("Avg. Articles")
+```
+
+```{r}
+list_of_active_AN1_users<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  filter(encoded=="AN1")%>%
+  group_by(did_churn)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=ifelse(`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`>1,1,0))%>%
+  filter(was_active==1)
+
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,videos)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_photos,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_visits=mean(total_photos,na.rm=TRUE))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_visits,digits=1)))+labs(title="AN1 First Time Users Avg. photo-galleries per Month by Churn Status")+xlab("Contract Month")+ylab("Avg. Photo Galleries")
+```
+
+
+
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  mutate(was_active=ifelse(total_visits>0,1,0))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(n=sum(was_active))%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  summarise(n=mean(n))
+
+nc<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  mutate(was_active=ifelse(total_visits>0,1,0))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(n=sum(was_active))%>%
+  filter(did_churn==0)
+
+yc<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  mutate(was_active=ifelse(total_visits>0,1,0))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(n=sum(was_active))%>%
+  filter(did_churn==1)
+
+
+```
+```{r}
+t.test(nc$n,yc$n,alt="g")
+```
+A comparison of active users shows that renewed active users have, on average, more months active compared to churned users. 
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,encoded,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  mutate(was_active=ifelse(total_visits>0,1,0))%>%
+  group_by(date_period,did_churn,was_active)%>%
+  summarise(n=n_distinct(CUSTOMER_NUMBER))%>%
+  mutate(total=sum(n))%>%
+  mutate(prop_active=round(n/total*100))%>%
+  filter(was_active==1)%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,prop_active,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(prop_active,digits=1)))+labs(title="AN1 First Time Users % Active users per Month by Churn Status")+xlab("Contract Month")
+```
+
+For active users (users who have visited the site at all), we find that users who churned have a lower proportion of active users as contract month increases. The first change in active proportion occurs at the three month mark with the largest differences in proprtion occuring at the 4th month and the 9th month. By the end of the contract, churned users have an active population of 45% for active users.
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_delta_visits=mean(abs_delta_visits,na.rm=TRUE))%>%
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=1)))+labs(title="AN1 First Time Users avg. Delta Visits users per Month by Churn Status")+xlab("Contract Month")
+  
+  
+  select(-c(total_visits_NA,non_articles_NA,articles_NA))%>%
+  
+  mutate(lag_visits=lag(total_visits),
+         lag_articles_per_visit=lag(articles_per_visit))%>%
+  mutate(abs_delta_visits=abs(total_visits-lag_visits),
+         abs_articles_per_visit=(articles_per_visit-lag_articles_per_visit))%>%
+  
+```
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,articles)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  ungroup()%>%
+  summarise(mean_delta_articles=mean(abs_delta_visits,na.rm=TRUE),
+            median_delta_articles=median(abs_delta_visits,na.rm=TRUE),
+            sd_delta_articles=sd(abs_delta_visits,na.rm=TRUE),
+            q_25=quantile(abs_delta_visits,0.25,na.rm=TRUE),
+            q_50=quantile(abs_delta_visits,0.5,na.rm=TRUE),
+            q_75=quantile(abs_delta_visits,0.75,na.rm=TRUE))
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles per Month by Churn Status")+xlab("Contract Month")+ylab("Delta Clickshare Pages")
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,articles)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  summarise(mean_delta=mean(abs_delta_visits,na.rm=TRUE))%>%
+  mutate(velocity_category=ifelse(mean_delta<4,"Stable",
+                                  "Volatile"))%>%
+  ungroup()%>%
+  group_by(did_churn,velocity_category)%>%
+  summarise(n=n())%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,3))
+  
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles per Month by Churn Status")+xlab("Contract Month")+ylab("Delta Clickshare Pages")
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  ungroup()%>%
+  summarise(mean_delta_visits=mean(abs_delta_visits,na.rm=TRUE),
+            median_delta_visits=median(abs_delta_visits,na.rm=TRUE),
+            sd_delta_visits=sd(abs_delta_visits,na.rm=TRUE),
+            q_25=quantile(abs_delta_visits,0.25,na.rm=TRUE),
+            q_50=quantile(abs_delta_visits,0.5,na.rm=TRUE),
+            q_75=quantile(abs_delta_visits,0.75,na.rm=TRUE))
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles per Month by Churn Status")+xlab("Contract Month")+ylab("Delta Clickshare Pages")
+```
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,business,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn,business)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER,did_churn,business)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  summarise(mean_delta=mean(abs_delta_visits,na.rm=TRUE))%>%
+  mutate(velocity_category=ifelse(mean_delta<=3,"Stable",
+                                  "Volatile"))%>%
+  ungroup()%>%
+  group_by(did_churn,business,velocity_category)%>%
+  summarise(n=n())%>%
+  group_by(did_churn,business)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,3))
+  
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles per Month by Churn Status")+xlab("Contract Month")+ylab("Delta Clickshare Pages")
+
+
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,clickshare_pages)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  ungroup()%>%
+  summarise(mean_clickshare_visits=mean(abs_delta_visits,na.rm=TRUE),
+            median_clickshare_visits=median(abs_delta_visits,na.rm=TRUE),
+            sd_clickshare_visits=sd(abs_delta_visits,na.rm=TRUE),
+            q_25=quantile(abs_delta_visits,0.25,na.rm=TRUE),
+            q_50=quantile(abs_delta_visits,0.5,na.rm=TRUE),
+            q_75=quantile(abs_delta_visits,0.75,na.rm=TRUE))
+  filter(!is.na(mean_delta_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles per Month by Churn Status")+xlab("Contract Month")+ylab("Delta Clickshare Pages")
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(clickshare_sub_pages=clickshare_page_account+subscribe_page+clickshare_page_non_account)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,clickshare_sub_pages)%>%
+  select(CUSTOMER_NUMBER,did_churn,business,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  summarise(mean_delta=mean(abs_delta_visits,na.rm=TRUE))%>%
+  mutate(velocity_category=ifelse(mean_delta<=1,"Stable",
+                                  "Volatile"))%>%
+  ungroup()%>%
+  group_by(did_churn,velocity_category)%>%
+  summarise(n=n())%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,3))
+```
+
+```{r}
+```
+
+
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  spread(date_period,total_visits)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_visits=lag(total_visits),
+         abs_delta_visits=abs(total_visits-lag_visits))%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  summarise(mean_delta_visits=mean(abs_delta_visits,na.rm=TRUE))
+```
+  
+
+
+
+
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+   pivot_wider(names_from=date_period,values_from=c("articles","non_articles","total_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  select(-c(articles_NA,non_articles_NA,total_visits_NA))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  mutate(articles_per_visit_01=articles_1/total_visits_1,
+         articles_per_visit_02=articles_2/total_visits_2,
+         articles_per_visit_03=articles_3/total_visits_3,
+         articles_per_visit_04=articles_4/total_visits_4,
+         articles_per_visit_05=articles_5/total_visits_5,
+         articles_per_visit_06=articles_6/total_visits_6,
+         articles_per_visit_07=articles_7/total_visits_7,
+         articles_per_visit_08=articles_8/total_visits_8,
+         articles_per_visit_09=articles_9/total_visits_9,
+         articles_per_visit_10=articles_10/total_visits_10,
+         articles_per_visit_11=articles_11/total_visits_11,
+         articles_per_visit_12=articles_12/total_visits_12)%>%
+    mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  gather(key=date_period,value=articles_per_visit,`articles_per_visit_01`:`articles_per_visit_12`)%>%
+  mutate(date_period=str_sub(date_period,-2,-1))%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  
+  mutate(lag_articles_per_visit=lag(articles_per_visit),
+         abs_delta_art_visits=abs(articles_per_visit-lag_articles_per_visit))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_delta_art_visits=mean(abs_delta_art_visits,na.rm=TRUE))%>%
+  filter(!is.na(mean_delta_art_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_art_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_art_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta articles/Visits users per Month by Churn Status")+xlab("Contract Month")
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+   pivot_wider(names_from=date_period,values_from=c("articles","non_articles","total_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads))%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  select(-c(articles_NA,non_articles_NA,total_visits_NA))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  mutate(non_articles_per_visit_01=non_articles_1/total_visits_1,
+         non_articles_per_visit_02=non_articles_2/total_visits_2,
+         non_articles_per_visit_03=non_articles_3/total_visits_3,
+         non_articles_per_visit_04=non_articles_4/total_visits_4,
+         non_articles_per_visit_05=non_articles_5/total_visits_5,
+         non_articles_per_visit_06=non_articles_6/total_visits_6,
+         non_articles_per_visit_07=non_articles_7/total_visits_7,
+         non_articles_per_visit_08=non_articles_8/total_visits_8,
+         non_articles_per_visit_09=non_articles_9/total_visits_9,
+         non_articles_per_visit_10=non_articles_10/total_visits_10,
+         non_articles_per_visit_11=non_articles_11/total_visits_11,
+         non_articles_per_visit_12=non_articles_12/total_visits_12)%>%
+    mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  gather(key=date_period,value=non_articles_per_visit,`non_articles_per_visit_01`:`non_articles_per_visit_12`)%>%
+  mutate(date_period=str_sub(date_period,-2,-1))%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(lag_non_articles_per_visit=lag(non_articles_per_visit),
+         abs_delta_non_art_visits=abs(non_articles_per_visit-lag_non_articles_per_visit))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_delta_non_art_visits=mean(abs_delta_non_art_visits,na.rm=TRUE))%>%
+  filter(!is.na(mean_delta_non_art_visits))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_delta_non_art_visits,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_delta_non_art_visits,digits=2)))+labs(title="AN1 First Time Users avg. Delta non-articles/Visits users per Month by Churn Status")+xlab("Contract Month")
+```
+
+
+
+
+
+
+
+```{r}
+set.seed(12302)
+
+ctrlspecs <- trainControl(method="cv", 
+                          number=10, 
+                          savePredictions="all",
+                          classProbs=TRUE)
+
+baseline_values<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN1")%>%
+  filter(date_period<=6)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+   pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles","videos","people_pages","data_center","model_details","award_programs","photo_galleries","events","total_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads))%>%
+  select(c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,recency_6,articles_1,articles_2,articles_3,articles_4,articles_5,articles_6,videos_1,videos_2,videos_3,videos_4,videos_5,videos_6,non_articles_1,non_articles_2,non_articles_3,non_articles_4,non_articles_5,non_articles_6,total_visits_1,total_visits_2,total_visits_3,total_visits_4,total_visits_5))%>%
+  mutate(recency=ifelse(is.na(recency_6)|is.infinite(recency_6),30,recency_6))%>%
+  select(-recency_6)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  mutate(active_1=ifelse(total_visits_1>0,1,0),
+         active_2=ifelse(total_visits_2>0,1,0),
+         active_3=ifelse(total_visits_3>0,1,0),
+         active_4=ifelse(total_visits_4>0,1,0),
+         active_5=ifelse(total_visits_5>0,1,0))%>%
+  select(-c(total_visits_1,total_visits_2,total_visits_3,total_visits_4,total_visits_5))%>%
+  select(did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,recency,active_1,active_2,active_3,active_4,active_5)%>%
+  mutate(did_churn=as.factor(ifelse(did_churn==1,"Yes","No")))%>%
+  mutate(across(where(is.numeric),~scale(.x)))%>%
+  mutate(business=ifelse(str_detect(business,"Other"),"o",
+                         ifelse(str_detect(business,"Manu"),"m",
+                         ifelse(str_detect(business,"Prof"),"p","r"))))%>%
+  mutate(business=as.factor(business))
+  
+  group_by(CUSTOMER_NUMBER,business,did_churn,encoded)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_videos,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  ungroup()%>%
+  group_by(did_churn,date_period,business)
+  
+index<-createDataPartition(baseline_values$did_churn,p=0.8,list=FALSE)
+
+train<-baseline_values[index,]
+test<-baseline_values[-index,]
+
+train
+  
+base_log<-glm(did_churn~.-promote_webinar,family=binomial(link="logit"),data=train)
+
+base_log<-model1 <- train(did_churn~., data=train, 
+                method="glm", 
+                family=binomial, 
+                trControl=ctrlspecs)
+
+print(base_log)
+
+summary(base_log)
+```
+```{r}
+varImp(base_log)
+```
+```{r}
+pred<-predict(base_log,test)
+
+confusionMatrix(test$did_churn,pred)
+
+test%>%
+  group_by(did_churn)%>%
+  summarise(n=n())
+```
+
+Without using article or engagement metrics other than was-active and recency, we are able predict decently well whether someone will churn. If we add in our activity data, do we get better results?
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(had_soft_cancel=ifelse(!is.na(soft_cancel_date)&soft_cancel_date>=START_DATE&soft_cancel_date<=reference_date,1,0))%>%
+  group_by(did_churn,IS_AUTO_RENEW,had_soft_cancel)%>%
+  summarise(n=n_distinct(CUSTOMER_NUMBER))
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  mutate(sub_click=clickshare_page_non_account+clickshare_page_account)%>%
+  spread(date_period,sub_click)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(was_active=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  gather(key=date_period,value=total_visits,`1`:`12`)%>%
+  mutate(date_period=as.integer(date_period))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  group_by(did_churn,date_period)%>%
+  summarise(mean_clickshare_page_account=mean(total_visits,na.rm=TRUE))%>%
+  filter(!is.na(mean_clickshare_page_account))%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  ggplot(aes(date_period,mean_clickshare_page_account,color=did_churn))+geom_line()+geom_point()+theme_minimal()+scale_x_continuous(breaks=seq(1, 12, 1))+geom_text_repel(aes(label=round(mean_clickshare_page_account,digits=2)))+labs(title="AN1 First Time Users avg.clickshare pages per Month by Churn Status")+xlab("Contract Month")
+```
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2"|encoded=="AN1"|encoded=="AN4"|encoded=="AN3")%>%
+  filter(CUSTOMER_NUMBER%in%list_of_active_AN1_users$CUSTOMER_NUMBER)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(articles_per_visit=articles/total_visits)%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  ungroup()%>%
+  mutate(sub_click=clickshare_page_non_account)%>%
+  spread(date_period,sub_click)%>%
+  select(CUSTOMER_NUMBER,did_churn,`1`,`2`,`3`,`4`,`5`,`6`,`7`,`8`,`9`,`10`,`11`,`12`)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,did_churn)%>%
+  summarise(`1`=sum(`1`),
+            `2`=sum(`2`),
+            `3`=sum(`3`),
+            `4`=sum(`4`),
+            `5`=sum(`5`),
+            `6`=sum(`6`),
+            `7`=sum(`7`),
+            `8`=sum(`8`),
+            `9`=sum(`9`),
+            `10`=sum(`10`),
+            `11`=sum(`11`),
+            `12`=sum(`12`))%>%
+  ungroup()%>%
+  mutate(account_access_pages=`1`+`2`+`3`+`4`+`5`+`6`+`7`+`8`+`9`+`10`+`11`+`12`)%>%
+  group_by(did_churn)%>%
+  summarise(avg_account_access_pages=mean(account_access_pages))
+```
+```{r}
+baseline_values_2<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN1")%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+   pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles","videos","people_pages","data_center","model_details","award_programs","photo_galleries","events","total_visits","clickshare_pages","subscribe_page"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  mutate(recency=ifelse(is.na(recency_12)|is.infinite(recency_12),30,recency_12))%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  mutate(active_1=ifelse(total_visits_1>0,1,0),
+         active_2=ifelse(total_visits_2>0,1,0),
+         active_3=ifelse(total_visits_3>0,1,0),
+         active_4=ifelse(total_visits_4>0,1,0),
+         active_5=ifelse(total_visits_5>0,1,0),
+         active_6=ifelse(total_visits_6>0,1,0),
+         active_7=ifelse(total_visits_7>0,1,0),
+         active_8=ifelse(total_visits_8>0,1,0),
+         active_9=ifelse(total_visits_9>0,1,0),
+         active_10=ifelse(total_visits_10>0,1,0),
+         active_11=ifelse(total_visits_11>0,1,0),
+         active_12=ifelse(total_visits_12>0,1,0))%>%
+  mutate(delta_2_clickshare=abs(clickshare_pages_2-clickshare_pages_1),
+         delta_3_clickshare=abs(clickshare_pages_3-clickshare_pages_2),
+         delta_4_clickshare=abs(clickshare_pages_4-clickshare_pages_3),
+         delta_5_clickshare=abs(clickshare_pages_5-clickshare_pages_4),
+         delta_6_clickshare=abs(clickshare_pages_6-clickshare_pages_5),
+         delta_7_clickshare=abs(clickshare_pages_7-clickshare_pages_6),
+         delta_8_clickshare=abs(clickshare_pages_8-clickshare_pages_7),
+         delta_9_clickshare=abs(clickshare_pages_9-clickshare_pages_8),
+         delta_10_clickshare=abs(clickshare_pages_10-clickshare_pages_9),
+         delta_11_clickshare=abs(clickshare_pages_11-clickshare_pages_10),
+         delta_12_clickshare=abs(clickshare_pages_12-clickshare_pages_11))%>%
+  mutate(delta_2_visits=abs(total_visits_2-total_visits_1),
+         delta_3_visits=abs(total_visits_3-total_visits_2),
+         delta_4_visits=abs(total_visits_4-total_visits_3),
+         delta_5_visits=abs(total_visits_5-total_visits_4),
+         delta_6_visits=abs(total_visits_6-total_visits_5),
+         delta_7_visits=abs(total_visits_7-total_visits_6),
+         delta_8_visits=abs(total_visits_8-total_visits_7),
+         delta_9_visits=abs(total_visits_9-total_visits_8),
+         delta_10_visits=abs(total_visits_10-total_visits_9),
+         delta_11_visits=abs(total_visits_11-total_visits_10),
+         delta_12_visits=abs(total_visits_12-total_visits_11))%>%
+  mutate(articles=across(starts_with("articles"))%>%rowSums)%>%
+  mutate(clickshare=across(starts_with("clickshare"))%>%rowSums)%>%
+  mutate(total_visits=across(starts_with("total_visits"))%>%rowSums)%>%
+  mutate(sub_pages=across(starts_with("subscribe"))%>%rowSums)%>%
+  mutate(delta_clickshare_avg=(delta_2_clickshare+delta_3_clickshare+delta_4_clickshare+delta_5_clickshare+delta_6_clickshare+delta_7_clickshare+delta_8_clickshare+delta_9_clickshare+delta_10_clickshare+delta_11_clickshare+delta_12_clickshare)/11)%>%
+    mutate(delta_visits_avg=(delta_2_visits+delta_3_visits+delta_4_visits+delta_5_visits+delta_6_visits+delta_7_visits+delta_8_visits+delta_9_visits+delta_10_visits+delta_11_visits+delta_12_visits)/11)%>%
+  mutate(active_terms=active_1+active_2+active_3+active_4+active_5+active_6+active_7+active_8+active_9+active_10+active_11+active_12)%>%
+  select(-c(total_visits_1,total_visits_2,total_visits_3,total_visits_4,total_visits_5))%>%
+  select(did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,recency,active_terms,delta_clickshare_avg,delta_visits_avg,articles,clickshare,total_visits,sub_pages)%>%
+  mutate(did_churn=as.factor(ifelse(did_churn==1,"Yes","No")))%>%
+  mutate(across(where(is.numeric),~scale(.x)))%>%
+  mutate(business=ifelse(str_detect(business,"Other"),"o",
+                         ifelse(str_detect(business,"Manu"),"m",
+                         ifelse(str_detect(business,"Prof"),"p","r"))))%>%
+  mutate(business=as.factor(business))
+  
+index<-createDataPartition(baseline_values_2$did_churn,p=0.8,list=FALSE)
+
+train_set_2<-baseline_values_2[index,]
+test_set_2<-baseline_values_2[-index,]
+
+test_set_2%>%
+  group_by(did_churn)%>%
+  summarise(n=n())
+
+
+base_log_2<- train(did_churn~IS_AUTO_RENEW*active_terms+recency+total_visits*delta_visits_avg, data=train_set_2, 
+                method="glm", 
+                family=binomial, 
+                trControl=ctrlspecs)
+
+print(base_log)
+
+summary(base_log_2)
+
+varImp(base_log_2)
+
+baseline_values_2
+```
+```{r}
+pred<-predict(base_log_2,test_set_2)
+
+confusionMatrix(test_set_2$did_churn,pred)
+
+test%>%
+  group_by(did_churn)%>%
+  summarise(n=n())
+```
+
+```{r}
+baseline_values_3<-test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN1")%>%
+  filter(date_period<=6)%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+   pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles","videos","people_pages","data_center","model_details","award_programs","photo_galleries","events","total_visits","clickshare_pages","subscribe_page"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  mutate(recency=ifelse(is.na(recency_6)|is.infinite(recency_6),30,recency_6))%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  mutate(active_1=ifelse(total_visits_1>0,1,0),
+         active_2=ifelse(total_visits_2>0,1,0),
+         active_3=ifelse(total_visits_3>0,1,0),
+         active_4=ifelse(total_visits_4>0,1,0),
+         active_5=ifelse(total_visits_5>0,1,0),
+         active_6=ifelse(total_visits_6>0,1,0))%>%
+  mutate(delta_2_clickshare=abs(clickshare_pages_2-clickshare_pages_1),
+         delta_3_clickshare=abs(clickshare_pages_3-clickshare_pages_2),
+         delta_4_clickshare=abs(clickshare_pages_4-clickshare_pages_3),
+         delta_5_clickshare=abs(clickshare_pages_5-clickshare_pages_4),
+         delta_6_clickshare=abs(clickshare_pages_6-clickshare_pages_5))%>%
+  mutate(delta_2_visits=abs(total_visits_2-total_visits_1),
+         delta_3_visits=abs(total_visits_3-total_visits_2),
+         delta_4_visits=abs(total_visits_4-total_visits_3),
+         delta_5_visits=abs(total_visits_5-total_visits_4),
+         delta_6_visits=abs(total_visits_6-total_visits_5))%>%
+  mutate(articles=across(starts_with("articles"))%>%rowSums)%>%
+  mutate(clickshare=across(starts_with("clickshare"))%>%rowSums)%>%
+  mutate(total_visits=across(starts_with("total_visits"))%>%rowSums)%>%
+  mutate(sub_pages=across(starts_with("subscribe"))%>%rowSums)%>%
+  mutate(delta_clickshare_avg=(delta_2_clickshare+delta_3_clickshare+delta_4_clickshare+delta_5_clickshare+delta_6_clickshare)/5)%>%
+    mutate(delta_visits_avg=(delta_2_visits+delta_3_visits+delta_4_visits+delta_5_visits+delta_6_visits)/5)%>%
+  select(-c(total_visits_1,total_visits_2,total_visits_3,total_visits_4,total_visits_5))%>%
+  select(did_churn,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,recency,active_1,active_2,active_3,active_4,active_5,active_6,delta_clickshare_avg,delta_visits_avg,articles,clickshare,total_visits,sub_pages)%>%
+  mutate(did_churn=as.factor(ifelse(did_churn==1,"Yes","No")))%>%
+  mutate(across(where(is.numeric),~scale(.x)))%>%
+  mutate(business=ifelse(str_detect(business,"Other"),"o",
+                         ifelse(str_detect(business,"Manu"),"m",
+                         ifelse(str_detect(business,"Prof"),"p","r"))))%>%
+  mutate(business=as.factor(business))
+
+index_3<-createDataPartition(baseline_values_3$did_churn,p=0.8,list=FALSE)
+
+train_6<-baseline_values_3[index_3,]
+test_6<-baseline_values_3[-index_3,]
+
+base_log_3<- train(did_churn~.-IS_AUTO_RENEW, data=train_6, 
+                method="glm", 
+                family=binomial, 
+                trControl=ctrlspecs)
+
+summary(base_log_3)
+```
+
+```{r}
+pred<-predict(base_log_3,test_6)
+
+confusionMatrix(test_6$did_churn,pred)
+```
+AN2 BABYYYYYYY
+
+```{r}
+test_2%>%
+  mutate(an_coding=paste(AN1,AN2,AN3,AN4))%>%
+  mutate(encoded=ifelse(an_coding=="0 0 0 1","AN4",
+                ifelse(an_coding=="0 0 1 0","AN3",
+                       ifelse(an_coding=="0 1 0 0","AN2",
+                              ifelse(an_coding=="0 1 0 1","AN4+",
+                                     ifelse(an_coding=="0 1 1 0","AN3+",
+                                            ifelse(an_coding=="1 0 0 0","AN1","AN1+AN2")))))))%>%
+  mutate(total_visits=mobile_visits+other_visits+tablet_visits+television_visits)%>%
+  filter(encoded=="AN2")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

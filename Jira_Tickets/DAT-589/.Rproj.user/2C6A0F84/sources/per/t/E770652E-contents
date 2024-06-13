@@ -1,0 +1,172 @@
+---
+title: "Annual Leading Churn Indicators"
+author: "Andrew Lin"
+date: "2024-03-11"
+output: html_document
+---
+
+```{r}
+annual_values<-part_1_annual%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,TERM_NUMBER,FIRST_DATE,START_DATE,EXPIRE_DATE,RATE,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,reference_date,clickshareuserid,business,business_detail)%>%
+  mutate(mobile_visits=ifelse(`Mobile Device Type`=="Mobile Phone",1,0))%>%
+  mutate(desktop_visit=ifelse(`Mobile Device Type`=="Other",1,0))%>%
+  mutate(other_visit=ifelse(str_detect(`Mobile Device Type`,"Other|Mobile"),1,0))%>%
+  summarise(most_recent_date=max(Date,na.rm=TRUE),
+            mobile_visits=sum(mobile_visits,na.rm=TRUE),
+            desktop_visits=sum(desktop_visit,na.rm=TRUE),
+            other_visit=sum(other_visit,na.rm=TRUE),
+            total_articles=sum(n_articles,na.rm=TRUE),
+            total_non_articles=sum(n_non_articles,na.rm=TRUE),
+            total_clickshare_non_account=sum(n_clickshare_non_account_change,na.rm=TRUE),
+            total_clickshare_acc_change=sum(n_clickshare_account_change,na.rm=TRUE),
+            total_cs_suspend=sum(n_cs_suspend,na.rm=TRUE),
+            total_cs_hard_cancel=sum(n_cs_hard_cancel,na.rm=TRUE),
+            total_cs_soft_cancel=sum(n_cs_soft_cancel,na.rm=TRUE),
+            total_cs_sub=sum(n_cs_sub,na.rm=TRUE),
+            total_cs_order=sum(n_cs_order,na.rm=TRUE),
+            total_cs_account=sum(n_cs_account,na.rm=TRUE))%>%
+  ungroup()
+
+part_1_annual%>%
+  mutate(diff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(week_period=floor(diff/7)+1)
+  
+
+high_level_ds<-part_1_annual%>%
+  mutate(did_churn=ifelse(is.na(RENEWAL_ORDER_DATE),1,0))%>%
+  mutate(diff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(week_period=floor(diff/7)+1)%>%
+  mutate(recency=ifelse(is.infinite(as.numeric(difftime(reference_date,Date,units="days"))),365,as.numeric(difftime(reference_date,Date,units="days"))))%>%
+  mutate(mobile_visits=ifelse(`Mobile Device Type`=="Mobile Phone",1,0))%>%
+  mutate(desktop_visit=ifelse(`Mobile Device Type`=="Other",1,0))%>%
+  mutate(other_visit=ifelse(str_detect(`Mobile Device Type`,"Other|Mobile"),1,0))%>%
+  mutate(article_visit=ifelse(n_articles>0,1,0))%>%
+  mutate(soft_cancel_total=n_cs_suspend+n_cs_hard_cancel+n_cs_soft_cancel)%>%
+  mutate(customer_service=(n_cs_sub+n_cs_order+n_cs_account))%>%
+  mutate(min_recency=min(recency,na.rm=TRUE))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,TERM_NUMBER,FIRST_DATE,START_DATE,EXPIRE_DATE,RATE,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,did_churn,reference_date,clickshareuserid,business,business_detail,min_recency,week_period)%>%
+  summarise(n_visits=n_distinct(vis_id_number,na.rm=TRUE),
+            articles=sum(n_articles,na.rm=TRUE),
+            clickshare_account_change=sum(n_clickshare_account_change,na.rm=TRUE),
+            soft_cancels=sum(soft_cancel_total,na.rm=TRUE),
+            cust_service=sum(customer_service,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,did_churn,TERM_NUMBER,IS_AUTO_RENEW,business,business_detail,min_recency,RATE,reference_date)%>%
+  summarise(active_weeks=n_distinct(week_period,na.rm=TRUE),
+            n_visits=sum(n_visits,na.rm=TRUE),
+            n_articles=sum(articles,na.rm=TRUE),
+            n_clickshare=sum(clickshare_account_change,na.rm=TRUE),
+            n_soft_cancels=sum(soft_cancels,na.rm=TRUE),
+            n_cust_service=sum(cust_service,na.rm=TRUE))%>%
+  mutate(min_recency=ifelse(is.infinite(min_recency),365,min_recency))%>%
+  mutate(business_industry_classification=ifelse(str_detect(tolower(business_detail),"advertiser|occasional|sample")|is.na(business_detail),"Other",business_detail))%>%
+  ungroup()%>%
+  select(-c(business,business_detail))
+```
+```{r}
+write.csv(high_level_ds,"high_level_an_data.csv")
+```
+
+
+
+AN1
+```{r}
+an_1_data_set<-high_level_ds%>%
+  filter(PUB_CODE=="AN1")%>%
+  mutate(diff_from_std_rate=if_else(reference_date>as.Date("05/01/2023","%m/%d/%Y"),199-RATE,169-RATE))%>%
+  select(did_churn,TERM_NUMBER,IS_AUTO_RENEW,min_recency,active_weeks,n_visits,n_articles,n_clickshare,n_soft_cancels,n_cust_service,business_industry_classification,diff_from_std_rate)%>%
+  mutate(TERM_NUMBER=as.numeric(scale(TERM_NUMBER)),
+         min_recency=as.numeric(scale(min_recency)),
+         active_weeks=as.numeric(scale(active_weeks)),
+         n_visits=as.numeric(scale(n_visits)),
+         n_articles=as.numeric(scale(n_articles)),
+         n_clickshare=as.numeric(scale(n_clickshare)),
+         n_soft_cancels=as.numeric(scale(n_soft_cancels)),
+         n_cust_service=as.numeric(scale(n_cust_service)),
+         diff_from_std_rate=as.numeric(scale(diff_from_std_rate)),
+         IS_AUTO_RENEW=as.numeric(scale(ifelse(IS_AUTO_RENEW=="N",0,1))),
+         business_industry_classification=as.factor(business_industry_classification))
+
+an_1_data_set_unnormalized<-high_level_ds%>%
+  filter(PUB_CODE=="AN1")%>%
+  mutate(diff_from_std_rate=if_else(reference_date>as.Date("05/01/2023","%m/%d/%Y"),199-RATE,169-RATE))%>%
+  select(did_churn,TERM_NUMBER,IS_AUTO_RENEW,min_recency,active_weeks,n_visits,n_articles,n_clickshare,n_soft_cancels,n_cust_service,business_industry_classification,diff_from_std_rate)%>%
+  mutate(
+         business_industry_classification=as.factor(business_industry_classification))
+
+
+
+
+base_logit_2<-glm(did_churn~TERM_NUMBER*IS_AUTO_RENEW+TERM_NUMBER*diff_from_std_rate+IS_AUTO_RENEW*min_recency+IS_AUTO_RENEW*active_weeks+min_recency*active_weeks+min_recency*n_soft_cancels+active_weeks*n_visits+active_weeks*diff_from_std_rate+n_clickshare*n_cust_service+business_industry_classification,data=an_1_data_set,family="binomial")
+summary(base_logit_2)
+```
+
+```{r}
+plot_model(base_logit_2,type="pred",terms=c("min_recency","active_weeks"))
+```
+```{r}
+an_1_data_set_unnormalized%>%
+  group_by(business_industry_classification)%>%
+  summarise(n=n())
+```
+
+```{r}
+base_logit_2_un<-glm(did_churn~TERM_NUMBER*IS_AUTO_RENEW+TERM_NUMBER*diff_from_std_rate+IS_AUTO_RENEW*min_recency+IS_AUTO_RENEW*active_weeks+min_recency*active_weeks+min_recency*n_soft_cancels+active_weeks*n_visits+active_weeks*diff_from_std_rate+n_clickshare*n_cust_service+business_industry_classification,data=an_1_data_set_unnormalized,family="binomial")
+
+summary(base_logit_2_un)
+
+class(base_logit_2_un)<-c("lr",class(base_logit_2_un))
+
+boundary(base_logit_2_un,an_1_data_set_unnormalized,class="did_churn")
+````
+
+```{r}
+plot_model(base_logit_2_un,type="pred",terms=c("active_weeks","n_visits"))
+```
+
+
+
+```{r}
+plot_model(base_logit_2_un,type="pred",terms=c("n_clickshare"))
+```
+```{r}
+plot_model(base_logit_2_un,type="pred",terms=c("n_visits"))
+```
+```{r}
+plot_model(base_logit_2_un,type="pred",terms=c("n_cust_service"))
+```
+```{r}
+
+```
+
+
+
+```{r}
+an_2_data_set<-high_level_ds%>%
+  filter(PUB_CODE=="AN2")%>%
+  mutate(diff_from_std_rate=if_else(reference_date>as.Date("05/01/2023","%m/%d/%Y"),199-RATE,169-RATE))%>%
+  select(did_churn,TERM_NUMBER,IS_AUTO_RENEW,min_recency,active_weeks,n_visits,n_articles,n_clickshare,n_soft_cancels,n_cust_service,business_industry_classification,diff_from_std_rate)%>%
+  mutate(TERM_NUMBER=scale(TERM_NUMBER),
+         min_recency=scale(min_recency),
+         active_weeks=scale(active_weeks),
+         n_visits=scale(n_visits),
+         n_articles=scale(n_articles),
+         n_clickshare=scale(n_clickshare),
+         n_soft_cancels=scale(n_soft_cancels),
+         n_cust_service=scale(n_cust_service),
+         diff_from_std_rate=scale(diff_from_std_rate),
+         IS_AUTO_RENEW=scale(ifelse(IS_AUTO_RENEW=="N",0,1)),
+         business_industry_classification=as.factor(business_industry_classification))
+
+base_logit_an2<-glm(did_churn~.,data=an_2_data_set,family="binomial")
+summary(base_logit_an2)
+```
+
+```{r}
+```
+
+
+
+
+
+

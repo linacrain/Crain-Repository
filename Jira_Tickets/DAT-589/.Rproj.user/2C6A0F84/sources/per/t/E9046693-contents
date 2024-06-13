@@ -1,0 +1,754 @@
+---
+title: "C Script AA"
+author: "Andrew Lin"
+date: "2024-02-22"
+output: html_document
+---
+
+```{r}
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+zinfo <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'zoominfo',
+               sslmode='require')
+
+query_2<-'select userid,aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid from staging.clickshare_aa_stg'
+
+clickshare_stuff<-dbGetQuery(prod,query_2)
+
+clickshare_list<-clickshare_stuff%>%
+  mutate(aa_subscriberid=ifelse(aa_subscriberid=='',NA,aa_subscriberid),
+         aad_subscriberid=ifelse(aad_subscriberid=='',NA,aad_subscriberid),
+         aar_subscriberid=ifelse(aar_subscriberid=='',NA,aar_subscriberid),
+         aaz_subscriberid=ifelse(aaz_subscriberid=='',NA,aaz_subscriberid))%>%
+         
+  mutate(sub_id=coalesce(aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid))%>%
+  dplyr::select(userid,sub_id)%>%
+  filter(!is.na(sub_id))%>%
+  mutate(sub_id=as.double(sub_id))
+
+masterkey<-"select * from reporting.customer_master_reference where businessunitcode='AN'"
+
+demo<-"select * from reporting.mv_tbl__customer_demographic_aa_mv__0"
+
+master_key<-dbGetQuery(zinfo,masterkey)
+demographics<-dbGetQuery(zinfo,demo)
+
+dem_info<-demographics%>%
+  dplyr::select(clickshareusername,clickshareuserid,organization,businddescription,promotesubscriptions,promoteeditorial,promoteevents,promotewebinars,promotethirdparty,promoteadvertising,isactivesubscriber)
+
+clickshare_index<-AN_2022_2023_Clickshare_index%>%
+  mutate(clickshare=`UID All (v60) (evar60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),NA,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  select(Visitor_ID,clickshare)%>%
+  filter(!is.na(clickshare))%>%
+  distinct()
+
+soft_cancel<-an_soft_cancellations%>%
+  mutate(clickshare=`UID All (v60) (evar60)`)%>%
+  mutate(clickshare=as.double(ifelse(is.na(clickshare)|clickshare=="NO_id"|clickshare=="",NA,clickshare)))%>%
+  select(-`UID All (v60) (evar60)`)%>%
+  mutate(Date=as.Date(Date,"%B %d, %Y"))%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="Visitor_ID"))%>%
+  mutate(clickshare=coalesce(clickshare.x,clickshare.y))%>%
+  mutate(soft_cancel_date=Date)%>%
+  mutate(Visitor_ID_soft_cancel=Visitor_ID)%>%
+  select(soft_cancel_date,Visitor_ID_soft_cancel,clickshare)%>%
+  filter(!is.na(clickshare))%>%
+  distinct()
+
+AN_Web_Data_Reduced_3<-AN_2022_2023_Data_with_Clickshare_v3_with_clickshare_sub_pages
+
+
+
+dup_annual<-AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==52)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(n=n())%>%
+  filter(n==2)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  mutate(pub_code_level=ifelse(PUB_CODE=="AAD",2,
+                               ifelse(PUB_CODE=="AA",1,0)),
+         max_pub=max(pub_code_level,na.rm=TRUE),
+         )%>%
+  mutate(RATE=ifelse(max_pub>0,sum(RATE),RATE))%>%
+  mutate(max_term_number=max(TERM_NUMBER))%>%
+  mutate(max_term_pub=ifelse(max_pub==2,"AAD",
+                             ifelse(max_pub==1,"AA",PUB_CODE)))%>%
+  filter(max_term_pub==PUB_CODE)
+
+non_dup_annual<-AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==52)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(n=n())%>%
+  filter(n==1)
+
+annual_aa_list<-rbind(non_dup_annual,dup_annual)
+
+clean_annual_list<-annual_aa_list%>%
+  select(-c(n,pub_code_level,max_pub,max_term_number,max_term_pub))
+
+monthly<-AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==4)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))
+
+full_aa_adv_set<-rbind(clean_annual_list,monthly)
+
+full_aa_adv_set%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))
+AA_Web_Data_Reduced
+```
+
+
+```{r}
+aa_part_1_annual<-full_aa_adv_set%>%
+  filter(TERM==52)%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))%>%
+  left_join(dem_info,by=c("EMAIL_ADDRESS"="clickshareusername"))%>%
+  separate(businddescription,into=c('business','business_detail'),sep="-")%>%
+  mutate(promote_subscriptions=ifelse(is.na(promotesubscriptions)|promotesubscriptions=="N",0,1),
+         promote_editorial=ifelse(is.na(promoteeditorial)|promoteeditorial=="N",0,1),
+         promote_events=ifelse(is.na(promoteevents)|promoteevents=="N",0,1),
+         promote_third=ifelse(is.na(promotethirdparty)|promotethirdparty=="N",0,1),
+         promote_webinar=ifelse(is.na(promotewebinars)|promotewebinars=="N",0,1),
+         promote_ads=ifelse(is.na(promoteadvertising)|promoteadvertising=="N",0,1))%>%
+  select(-c(promotesubscriptions,promoteeditorial,promoteevents,promotethirdparty,promotewebinars,promoteadvertising))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  left_join(AA_Web_Data_Reduced,by=c("userid"="clickshare"))%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(datediff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(vis_id_number=paste(Visitor_ID,`Visit.Number`,sep="_"))%>%
+  mutate(vis_id_number=ifelse(Date>reference_date|Date<START_DATE,NA,vis_id_number),
+         Date=if_else(Date>reference_date|Date<START_DATE,NA,Date),
+         `Mobile.Device.Type`=ifelse(Date>reference_date|Date<START_DATE,NA,`Mobile.Device.Type`),
+         Referrers=ifelse(Date>reference_date|Date<START_DATE,NA,Referrers),
+         n_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_articles),
+         n_data=ifelse(Date>reference_date|Date<START_DATE,NA,n_data_center_pages),
+         n_non_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_non_articles),
+         n_clickshare_non_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_non_account_change),
+         n_clickshare_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_account_change),
+         n_subscribe_pages=ifelse(Date>reference_date|Date<START_DATE,NA,n_subscribe_pages),
+         n_cs_suspend=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_suspend),
+         n_cs_hard_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_hard_cancel),
+         n_cs_soft_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_soft_cancel),
+         n_cs_sub=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_sub),
+         n_cs_order=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_order),
+         n_cs_account=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_account)
+         )
+
+aa_part_1_annual
+
+AN_Web_Data_Reduced_3%>%
+  head(10)
+```
+
+```{r}
+aa_annual_long<-aa_part_1_annual%>%
+  mutate(visit_other=ifelse(!str_detect(`Mobile.Device.Type`,"Mobile Phone|Other")&!is.na(`Mobile.Device.Type`),1,0),
+         visit_mobile=ifelse(`Mobile.Device.Type`=="Mobile Phone"&!is.na(`Mobile.Device.Type`),1,0),
+         visit_desktop=ifelse(`Mobile.Device.Type`=="Other"&!is.na(`Mobile.Device.Type`),1,0))%>%
+  select(-`Mobile.Device.Type`)%>%
+  mutate(contract_time_period=as.numeric(difftime(reference_date,START_DATE,units="days")))%>%
+  mutate(START_DATE=as.Date(START_DATE,"%Y-%m-%d"),
+         reference_date=as.Date(reference_date,"%Y-%m-%d"))%>%
+  mutate(date_period=ifelse(datediff>=contract_time_period-30,1,
+                            ifelse(datediff<contract_time_period-30&datediff>=contract_time_period-60,2,
+                                   ifelse(datediff<contract_time_period-60&datediff>=contract_time_period-90,3,
+                                          ifelse(datediff<contract_time_period-90&datediff>=contract_time_period-120,4,
+                                                 ifelse(datediff<contract_time_period-120&datediff>=contract_time_period-150,5,
+                                                        ifelse(datediff<contract_time_period-150&datediff>=contract_time_period-180,6,
+                                                               ifelse(datediff<contract_time_period-180&datediff>=contract_time_period-210,7,
+                                                                      ifelse(datediff<contract_time_period-210&datediff>=contract_time_period-240,8,
+                                                                             ifelse(datediff<contract_time_period-240&datediff>=contract_time_period-270,9,
+                                                                                    ifelse(datediff<contract_time_period-270&datediff>=contract_time_period-300,10,
+                                                                                           ifelse(datediff<contract_time_period-300&datediff>=contract_time_period-330,11,12))))))))))))%>%
+  mutate(date_period=ifelse(is.na(vis_id_number),NA,date_period))%>%
+  select(-c(contract_time_period,datediff,Visitor_ID,`Visit.Number`))%>%
+  group_by(CUSTOMER_NUMBER,TERM,ORDER_NUMBER,RENEWAL_ORDER_DATE,EMAIL_ADDRESS,TERM_NUMBER,IS_AUTO_RENEW,RATE,START_DATE,reference_date,PUB_CODE,business,business_detail,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,date_period)%>%
+  summarise(most_recent_date=max(Date,na.rm=TRUE),
+            articles=sum(n_articles,na.rm=TRUE),
+            non_articles=sum(n_non_articles,na.rm=TRUE),
+            data_center=sum(n_data,na.rm=TRUE),
+            clickshare_page_non_account=sum(n_clickshare_non_account_change,na.rm=TRUE),
+            clickshare_page_account=sum(n_clickshare_account_change,na.rm=TRUE),
+            subscribe_page=sum(n_subscribe_pages,na.rm=TRUE),
+            mobile_visits=sum(visit_mobile,na.rm=TRUE),
+            desktop_visits=sum(visit_desktop,na.rm=TRUE),
+            other_visits=sum(visit_other,na.rm=TRUE),
+            cust_service_suspend=sum(n_cs_suspend,na.rm=TRUE),
+            cust_service_hard_cancel=sum(n_cs_hard_cancel,na.rm=TRUE),
+            cust_service_soft_cancel=sum(n_cs_sub,na.rm=TRUE),
+            cust_service_sub=sum(n_cs_sub,na.rm=TRUE),
+            cust_service_order=sum(n_cs_order,na.rm=TRUE),
+            cust_service_account-sum(n_cs_account,na.rm=TRUE))
+
+```
+
+
+```{r}
+articles<-aa_annual_long%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,TERM,reference_date,RENEWAL_ORDER_DATE,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,TERM,START_DATE,RENEWAL_ORDER_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,articles_1,articles_2,articles_3,articles_4,articles_5,articles_6,articles_7,articles_8,articles_9,articles_10,articles_11,articles_12,articles_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,TERM,PUB_CODE,ORDER_NUMBER,RENEWAL_ORDER_DATE,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(articles_01=sum(articles_1),
+            articles_02=sum(articles_2),
+            articles_03=sum(articles_3),
+            articles_04=sum(articles_4),
+            articles_05=sum(articles_5),
+            articles_06=sum(articles_6),
+            articles_07=sum(articles_7),
+            articles_08=sum(articles_8),
+            articles_09=sum(articles_9),
+            articles_10=sum(articles_10),
+            articles_11=sum(articles_11),
+            articles_12=sum(articles_12),
+            articles_NA=sum(articles_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_articles,articles_01:articles_12)%>%
+  select(-articles_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()
+
+non_articles<-aa_annual_long%>%
+  mutate(clickshare_pages=clickshare_page_non_account+clickshare_page_account)%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,non_articles_1,non_articles_2,non_articles_3,non_articles_4,non_articles_5,non_articles_6,non_articles_7,non_articles_8,non_articles_9,non_articles_10,non_articles_11,non_articles_12,non_articles_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(non_articles_01=sum(non_articles_1),
+            non_articles_02=sum(non_articles_2),
+            non_articles_03=sum(non_articles_3),
+            non_articles_04=sum(non_articles_4),
+            non_articles_05=sum(non_articles_5),
+            non_articles_06=sum(non_articles_6),
+            non_articles_07=sum(non_articles_7),
+            non_articles_08=sum(non_articles_8),
+            non_articles_09=sum(non_articles_9),
+            non_articles_10=sum(non_articles_10),
+            non_articles_11=sum(non_articles_11),
+            non_articles_12=sum(non_articles_12),
+            non_articles_NA=sum(non_articles_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_non_articles,non_articles_01:non_articles_12)%>%
+  select(-non_articles_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+
+
+clickshare_account_pages<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","clickshare_page_account"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,clickshare_page_account_1,clickshare_page_account_2,clickshare_page_account_3,clickshare_page_account_4,clickshare_page_account_5,clickshare_page_account_6,clickshare_page_account_7,clickshare_page_account_8,clickshare_page_account_9,clickshare_page_account_10,clickshare_page_account_11,clickshare_page_account_12,clickshare_page_account_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(clickshare_page_account_01=sum(clickshare_page_account_1),
+            clickshare_page_account_02=sum(clickshare_page_account_2),
+            clickshare_page_account_03=sum(clickshare_page_account_3),
+            clickshare_page_account_04=sum(clickshare_page_account_4),
+            clickshare_page_account_05=sum(clickshare_page_account_5),
+            clickshare_page_account_06=sum(clickshare_page_account_6),
+            clickshare_page_account_07=sum(clickshare_page_account_7),
+            clickshare_page_account_08=sum(clickshare_page_account_8),
+            clickshare_page_account_09=sum(clickshare_page_account_9),
+            clickshare_page_account_10=sum(clickshare_page_account_10),
+            clickshare_page_account_11=sum(clickshare_page_account_11),
+            clickshare_page_account_12=sum(clickshare_page_account_12),
+            clickshare_page_account_NA=sum(clickshare_page_account_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_clickshare_page_account,clickshare_page_account_01:clickshare_page_account_12)%>%
+  select(-clickshare_page_account_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+clickshare_non_account_pages<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","clickshare_page_non_account"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,clickshare_page_non_account_1,clickshare_page_non_account_2,clickshare_page_non_account_3,clickshare_page_non_account_4,clickshare_page_non_account_5,clickshare_page_non_account_6,clickshare_page_non_account_7,clickshare_page_non_account_8,clickshare_page_non_account_9,clickshare_page_non_account_10,clickshare_page_non_account_11,clickshare_page_non_account_12,clickshare_page_non_account_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(clickshare_page_non_account_01=sum(clickshare_page_non_account_1),
+            clickshare_page_non_account_02=sum(clickshare_page_non_account_2),
+            clickshare_page_non_account_03=sum(clickshare_page_non_account_3),
+            clickshare_page_non_account_04=sum(clickshare_page_non_account_4),
+            clickshare_page_non_account_05=sum(clickshare_page_non_account_5),
+            clickshare_page_non_account_06=sum(clickshare_page_non_account_6),
+            clickshare_page_non_account_07=sum(clickshare_page_non_account_7),
+            clickshare_page_non_account_08=sum(clickshare_page_non_account_8),
+            clickshare_page_non_account_09=sum(clickshare_page_non_account_9),
+            clickshare_page_non_account_10=sum(clickshare_page_non_account_10),
+            clickshare_page_non_account_11=sum(clickshare_page_non_account_11),
+            clickshare_page_non_account_12=sum(clickshare_page_non_account_12),
+            clickshare_page_non_account_NA=sum(clickshare_page_non_account_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_clickshare_page_non_account,clickshare_page_non_account_01:clickshare_page_non_account_12)%>%
+  select(-clickshare_page_non_account_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+events<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","events"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,events_1,events_2,events_3,events_4,events_5,events_6,events_7,events_8,events_9,events_10,events_11,events_12,events_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(events_01=sum(events_1),
+            events_02=sum(events_2),
+            events_03=sum(events_3),
+            events_04=sum(events_4),
+            events_05=sum(events_5),
+            events_06=sum(events_6),
+            events_07=sum(events_7),
+            events_08=sum(events_8),
+            events_09=sum(events_9),
+            events_10=sum(events_10),
+            events_11=sum(events_11),
+            events_12=sum(events_12),
+            events_NA=sum(events_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_events,events_01:events_12)%>%
+  select(-events_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+videos<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","videos"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,videos_1,videos_2,videos_3,videos_4,videos_5,videos_6,videos_7,videos_8,videos_9,videos_10,videos_11,videos_12,videos_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(videos_01=sum(videos_1),
+            videos_02=sum(videos_2),
+            videos_03=sum(videos_3),
+            videos_04=sum(videos_4),
+            videos_05=sum(videos_5),
+            videos_06=sum(videos_6),
+            videos_07=sum(videos_7),
+            videos_08=sum(videos_8),
+            videos_09=sum(videos_9),
+            videos_10=sum(videos_10),
+            videos_11=sum(videos_11),
+            videos_12=sum(videos_12),
+            videos_NA=sum(videos_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_videos,videos_01:videos_12)%>%
+  select(-videos_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+people_pages<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","people_pages"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,people_pages_1,people_pages_2,people_pages_3,people_pages_4,people_pages_5,people_pages_6,people_pages_7,people_pages_8,people_pages_9,people_pages_10,people_pages_11,people_pages_12,people_pages_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(people_pages_01=sum(people_pages_1),
+            people_pages_02=sum(people_pages_2),
+            people_pages_03=sum(people_pages_3),
+            people_pages_04=sum(people_pages_4),
+            people_pages_05=sum(people_pages_5),
+            people_pages_06=sum(people_pages_6),
+            people_pages_07=sum(people_pages_7),
+            people_pages_08=sum(people_pages_8),
+            people_pages_09=sum(people_pages_9),
+            people_pages_10=sum(people_pages_10),
+            people_pages_11=sum(people_pages_11),
+            people_pages_12=sum(people_pages_12),
+            people_pages_NA=sum(people_pages_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_people_pages,people_pages_01:people_pages_12)%>%
+  select(-people_pages_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+people_pages<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","people_pages"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,people_pages_1,people_pages_2,people_pages_3,people_pages_4,people_pages_5,people_pages_6,people_pages_7,people_pages_8,people_pages_9,people_pages_10,people_pages_11,people_pages_12,people_pages_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(people_pages_01=sum(people_pages_1),
+            people_pages_02=sum(people_pages_2),
+            people_pages_03=sum(people_pages_3),
+            people_pages_04=sum(people_pages_4),
+            people_pages_05=sum(people_pages_5),
+            people_pages_06=sum(people_pages_6),
+            people_pages_07=sum(people_pages_7),
+            people_pages_08=sum(people_pages_8),
+            people_pages_09=sum(people_pages_9),
+            people_pages_10=sum(people_pages_10),
+            people_pages_11=sum(people_pages_11),
+            people_pages_12=sum(people_pages_12),
+            people_pages_NA=sum(people_pages_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_people_pages,people_pages_01:people_pages_12)%>%
+  select(-people_pages_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+data_center<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","data_center"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,data_center_1,data_center_2,data_center_3,data_center_4,data_center_5,data_center_6,data_center_7,data_center_8,data_center_9,data_center_10,data_center_11,data_center_12,data_center_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(data_center_01=sum(data_center_1),
+            data_center_02=sum(data_center_2),
+            data_center_03=sum(data_center_3),
+            data_center_04=sum(data_center_4),
+            data_center_05=sum(data_center_5),
+            data_center_06=sum(data_center_6),
+            data_center_07=sum(data_center_7),
+            data_center_08=sum(data_center_8),
+            data_center_09=sum(data_center_9),
+            data_center_10=sum(data_center_10),
+            data_center_11=sum(data_center_11),
+            data_center_12=sum(data_center_12),
+            data_center_NA=sum(data_center_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_data_center,data_center_01:data_center_12)%>%
+  select(-data_center_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+award_programs<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","award_programs"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,award_programs_1,award_programs_2,award_programs_3,award_programs_4,award_programs_5,award_programs_6,award_programs_7,award_programs_8,award_programs_9,award_programs_10,award_programs_11,award_programs_12,award_programs_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(award_programs_01=sum(award_programs_1),
+            award_programs_02=sum(award_programs_2),
+            award_programs_03=sum(award_programs_3),
+            award_programs_04=sum(award_programs_4),
+            award_programs_05=sum(award_programs_5),
+            award_programs_06=sum(award_programs_6),
+            award_programs_07=sum(award_programs_7),
+            award_programs_08=sum(award_programs_8),
+            award_programs_09=sum(award_programs_9),
+            award_programs_10=sum(award_programs_10),
+            award_programs_11=sum(award_programs_11),
+            award_programs_12=sum(award_programs_12),
+            award_programs_NA=sum(award_programs_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_award_programs,award_programs_01:award_programs_12)%>%
+  select(-award_programs_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+mobile_visits<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","mobile_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,mobile_visits_1,mobile_visits_2,mobile_visits_3,mobile_visits_4,mobile_visits_5,mobile_visits_6,mobile_visits_7,mobile_visits_8,mobile_visits_9,mobile_visits_10,mobile_visits_11,mobile_visits_12,mobile_visits_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(mobile_visits_01=sum(mobile_visits_1),
+            mobile_visits_02=sum(mobile_visits_2),
+            mobile_visits_03=sum(mobile_visits_3),
+            mobile_visits_04=sum(mobile_visits_4),
+            mobile_visits_05=sum(mobile_visits_5),
+            mobile_visits_06=sum(mobile_visits_6),
+            mobile_visits_07=sum(mobile_visits_7),
+            mobile_visits_08=sum(mobile_visits_8),
+            mobile_visits_09=sum(mobile_visits_9),
+            mobile_visits_10=sum(mobile_visits_10),
+            mobile_visits_11=sum(mobile_visits_11),
+            mobile_visits_12=sum(mobile_visits_12),
+            mobile_visits_NA=sum(mobile_visits_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_mobile_visits,mobile_visits_01:mobile_visits_12)%>%
+  select(-mobile_visits_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+desktop_visits<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","desktop_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,desktop_visits_1,desktop_visits_2,desktop_visits_3,desktop_visits_4,desktop_visits_5,desktop_visits_6,desktop_visits_7,desktop_visits_8,desktop_visits_9,desktop_visits_10,desktop_visits_11,desktop_visits_12,desktop_visits_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(desktop_visits_01=sum(desktop_visits_1),
+            desktop_visits_02=sum(desktop_visits_2),
+            desktop_visits_03=sum(desktop_visits_3),
+            desktop_visits_04=sum(desktop_visits_4),
+            desktop_visits_05=sum(desktop_visits_5),
+            desktop_visits_06=sum(desktop_visits_6),
+            desktop_visits_07=sum(desktop_visits_7),
+            desktop_visits_08=sum(desktop_visits_8),
+            desktop_visits_09=sum(desktop_visits_9),
+            desktop_visits_10=sum(desktop_visits_10),
+            desktop_visits_11=sum(desktop_visits_11),
+            desktop_visits_12=sum(desktop_visits_12),
+            desktop_visits_NA=sum(desktop_visits_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_desktop_visits,desktop_visits_01:desktop_visits_12)%>%
+  select(-desktop_visits_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+other_visits<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","other_visits"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,other_visits_1,other_visits_2,other_visits_3,other_visits_4,other_visits_5,other_visits_6,other_visits_7,other_visits_8,other_visits_9,other_visits_10,other_visits_11,other_visits_12,other_visits_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(other_visits_01=sum(other_visits_1),
+            other_visits_02=sum(other_visits_2),
+            other_visits_03=sum(other_visits_3),
+            other_visits_04=sum(other_visits_4),
+            other_visits_05=sum(other_visits_5),
+            other_visits_06=sum(other_visits_6),
+            other_visits_07=sum(other_visits_7),
+            other_visits_08=sum(other_visits_8),
+            other_visits_09=sum(other_visits_9),
+            other_visits_10=sum(other_visits_10),
+            other_visits_11=sum(other_visits_11),
+            other_visits_12=sum(other_visits_12),
+            other_visits_NA=sum(other_visits_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_other_visits,other_visits_01:other_visits_12)%>%
+  select(-other_visits_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+subscribe_page<-annual_long%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","subscribe_page"),names_sep="_",id_cols=c(CUSTOMER_NUMBER,PUB_CODE,reference_date,START_DATE,RATE,TERM_NUMBER,ORDER_NUMBER,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads),values_fn={max})%>%
+  select(CUSTOMER_NUMBER,reference_date,START_DATE,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12,subscribe_page_1,subscribe_page_2,subscribe_page_3,subscribe_page_4,subscribe_page_5,subscribe_page_6,subscribe_page_7,subscribe_page_8,subscribe_page_9,subscribe_page_10,subscribe_page_11,subscribe_page_12,subscribe_page_NA)%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  group_by(CUSTOMER_NUMBER,TERM_NUMBER,PUB_CODE,ORDER_NUMBER,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12)%>%
+  summarise(subscribe_page_01=sum(subscribe_page_1),
+            subscribe_page_02=sum(subscribe_page_2),
+            subscribe_page_03=sum(subscribe_page_3),
+            subscribe_page_04=sum(subscribe_page_4),
+            subscribe_page_05=sum(subscribe_page_5),
+            subscribe_page_06=sum(subscribe_page_6),
+            subscribe_page_07=sum(subscribe_page_7),
+            subscribe_page_08=sum(subscribe_page_8),
+            subscribe_page_09=sum(subscribe_page_9),
+            subscribe_page_10=sum(subscribe_page_10),
+            subscribe_page_11=sum(subscribe_page_11),
+            subscribe_page_12=sum(subscribe_page_12),
+            subscribe_page_NA=sum(subscribe_page_NA))%>%
+  ungroup()%>%
+  gather(key=date_period,value=total_subscribe_page,subscribe_page_01:subscribe_page_12)%>%
+  select(-subscribe_page_NA)%>%
+  mutate(date_period=as.integer((str_sub(date_period,-2,-1))))%>%
+  ungroup()%>%
+  select(-c(TERM_NUMBER,RATE,START_DATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,recency_6,recency_12))
+
+
+tableau_data_set<-articles%>%
+  left_join(non_articles,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(clickshare_account_pages,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(clickshare_non_account_pages,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(events,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(videos,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+left_join(people_pages,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+left_join(data_center,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(award_programs,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(subscribe_page,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(mobile_visits,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(desktop_visits,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  left_join(other_visits,by=c("CUSTOMER_NUMBER"="CUSTOMER_NUMBER","reference_date"="reference_date","date_period"="date_period","ORDER_NUMBER"="ORDER_NUMBER","PUB_CODE"="PUB_CODE"))%>%
+  distinct()%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  arrange(date_period,.by_group=TRUE)%>%
+  mutate(total_visits=total_mobile_visits+total_desktop_visits+total_other_visits)%>%
+  mutate(lag_visits=lag(total_visits),
+         lag_articles=lag(total_articles),
+         lag_non_articles=lag(total_non_articles),
+         lag_clickshare_non_account_pages=lag(total_clickshare_page_non_account),
+         lag_clickshare_account_pages=lag(total_clickshare_page_account),
+         lag_subscribe_page=lag(total_subscribe_page))%>%
+  mutate(delta_visits=abs(total_visits-lag_visits),
+         delta_articles=abs(total_articles-lag_articles),
+         delta_non_articles=abs(total_non_articles-lag_non_articles),
+         delta_non_account_clickshare_pages=abs(total_clickshare_page_non_account-lag_clickshare_non_account_pages),
+         delta_account_clickshare_pages=abs(total_clickshare_page_account-lag_clickshare_account_pages),
+         delta_subscribe_page=abs(total_subscribe_page-lag_subscribe_page))%>%
+  mutate(recency=recency_12)%>%
+  select(-c(lag_visits,lag_articles,lag_non_articles,lag_subscribe_page,lag_clickshare_non_account_pages,lag_clickshare_account_pages,recency_6,recency_12))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(did_churn=ifelse(is.na(RENEWAL_ORDER_DATE),1,0))
+```
+
+
+```{r}
+an_monthly<-full_an_set%>%
+  filter(TERM=="Monthly")%>%
+  left_join(dem_info,by=c("EMAIL_ADDRESS"="clickshareusername"))%>%
+  separate(businddescription,into=c('business','business_detail'),sep="-")%>%
+  mutate(business=ifelse(business=="AWAITING CLASSIFICATION"|business=="COMP "|str_detect(business,"NON")|business=="unknown"|is.na(business),"Other/Unknown",business))%>%
+  select(-c(business_detail,isactivesubscriber))%>%
+  mutate(promote_subscriptions=ifelse(is.na(promotesubscriptions)|promotesubscriptions=="N",0,1),
+         promote_editorial=ifelse(is.na(promoteeditorial)|promoteeditorial=="N",0,1),
+         promote_events=ifelse(is.na(promoteevents)|promoteevents=="N",0,1),
+         promote_third=ifelse(is.na(promotethirdparty)|promotethirdparty=="N",0,1),
+         promote_webinar=ifelse(is.na(promotewebinars)|promotewebinars=="N",0,1),
+         promote_ads=ifelse(is.na(promoteadvertising)|promoteadvertising=="N",0,1))%>%
+  select(-c(promotesubscriptions,promoteeditorial,promoteevents,promotethirdparty,promotewebinars,promoteadvertising))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  left_join(soft_cancel,by=c("userid"="clickshare"))%>%
+  left_join(AN_Web_Data_Reduced_3,by=c("userid"="clickshare"))%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(datediff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(vis_id_number=paste(Visitor_ID,`Visit Number`,sep="_"))%>%
+  mutate(vis_id_number=ifelse(Date>reference_date|Date<START_DATE,NA,vis_id_number),
+         Date=if_else(Date>reference_date|Date<START_DATE,NA,Date),
+         `Mobile Device Type`=ifelse(Date>reference_date|Date<START_DATE,NA,`Mobile Device Type`),
+         n_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_articles),
+         n_non_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_non_articles),
+         n_videos=ifelse(Date>reference_date|Date<START_DATE,NA,n_videos),
+         n_people=ifelse(Date>reference_date|Date<START_DATE,NA,n_people),
+         n_data=ifelse(Date>reference_date|Date<START_DATE,NA,n_data),
+         n_model=ifelse(Date>reference_date|Date<START_DATE,NA,n_model),
+         n_award=ifelse(Date>reference_date|Date<START_DATE,NA,n_award),
+         n_photo=ifelse(Date>reference_date|Date<START_DATE,NA,n_photo),
+         n_event=ifelse(Date>reference_date|Date<START_DATE,NA,n_event),
+         n_clickshare_non_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_non_account_change),
+         n_clickshare_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_account_change),
+         n_subscribe_pages=ifelse(Date>reference_date|Date<START_DATE,NA,n_subscribe_pages))%>%
+  mutate(visit_other=ifelse(!str_detect(`Mobile Device Type`,"Mobile Phone|Other")&!is.na(`Mobile Device Type`),1,0),
+         visit_mobile=ifelse(`Mobile Device Type`=="Mobile Phone"&!is.na(`Mobile Device Type`),1,0),
+         visit_desktop=ifelse(`Mobile Device Type`=="Other"&!is.na(`Mobile Device Type`),1,0))%>%
+  select(-`Mobile Device Type`)
+
+tableau_monthly<-an_monthly%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,TERM,EMAIL_ADDRESS,PUB_CODE,TERM_NUMBER,FIRST_DATE,START_DATE,EXPIRE_DATE,RATE,IS_AUTO_RENEW,RENEWAL_ORDER_DATE,reference_date,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads)%>%
+  summarise(total_articles=sum(n_articles,na.rm=TRUE),
+            total_non_articles=sum(n_non_articles,na.rm=TRUE),
+            total_clickshare_page_account=sum(n_clickshare_account_change,na.rm=TRUE),
+            total_clickshare_page_non_account=sum(n_clickshare_non_account_change,na.rm=TRUE),
+            total_events=sum(n_event,na.rm=TRUE),
+            total_videos=sum(n_videos,na.rm=TRUE),
+            total_people_pages=sum(n_people,na.rm=TRUE),
+            total_data_center=sum(n_data,na.rm=TRUE),
+            total_award_programs=sum(n_award,na.rm=TRUE),
+            total_subscribe_page=sum(n_subscribe_pages,na.rm=TRUE),
+            total_mobile_visits=sum(visit_mobile,na.rm=TRUE),
+            total_desktop_visits=sum(visit_desktop,na.rm=TRUE),
+            total_other_visits=sum(visit_other,na.rm=TRUE),
+            recency=max(Date,na.rm=TRUE))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  mutate(total_visits=total_mobile_visits+total_desktop_visits+total_other_visits)%>%
+  mutate(lag_visits=lag(total_visits),
+         lag_articles=lag(total_articles),
+         lag_non_articles=lag(total_non_articles),
+         lag_clickshare_non_account_pages=lag(total_clickshare_page_non_account),
+         lag_clickshare_account_pages=lag(total_clickshare_page_account),
+         lag_subscribe_page=lag(total_subscribe_page))%>%
+  mutate(delta_visits=abs(total_visits-lag_visits),
+         delta_articles=abs(total_articles-lag_articles),
+         delta_non_articles=abs(total_non_articles-lag_non_articles),
+         delta_non_account_clickshare_pages=abs(total_clickshare_page_non_account-lag_clickshare_non_account_pages),
+         delta_account_clickshare_pages=abs(total_clickshare_page_account-lag_clickshare_account_pages),
+         delta_subscribe_page=abs(total_subscribe_page-lag_subscribe_page))%>%
+  select(-c(lag_visits,lag_articles,lag_non_articles,lag_subscribe_page,lag_clickshare_non_account_pages,lag_clickshare_account_pages))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(max_visits=max(total_visits,na.rm=TRUE))%>%
+  mutate(date_period=TERM_NUMBER)%>%
+  mutate(did_churn=ifelse(is.na(RENEWAL_ORDER_DATE),1,0))%>%
+  mutate(recency=ifelse(is.infinite(recency)|is.na(recency),30,as.numeric(difftime(EXPIRE_DATE,recency,units="days"))))
+
+tableau_monthly%>%
+  filter(CUSTOMER_NUMBER==34181066)
+```
+
+
+```{r}
+tableau_data_set
+```
+
+```{r}
+ordered_tableau_monthly<-tableau_monthly%>%
+  ungroup()%>%
+  select(CUSTOMER_NUMBER,TERM_NUMBER,TERM,PUB_CODE,ORDER_NUMBER,RENEWAL_ORDER_DATE,reference_date,START_DATE,RATE,IS_AUTO_RENEW,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,date_period,total_articles,total_non_articles,total_clickshare_page_account,total_clickshare_page_non_account,total_events,total_videos,total_people_pages,total_data_center,total_award_programs,total_subscribe_page,total_mobile_visits,total_desktop_visits,total_other_visits,total_visits,delta_visits,delta_articles,delta_non_articles,delta_non_account_clickshare_pages,delta_account_clickshare_pages,delta_subscribe_page,recency,did_churn)
+
+tableau_m_a<-rbind(tableau_data_set,ordered_tableau_monthly)
+
+tableau_m_a
+```
+
+```{r}
+write.csv(tableau_m_a,"tableau_an_data_monthly_annual_with_term.csv")
+```
+
+```{r}
+tableau_m_a%>%
+  filter(TERM=="Annual")%>%
+  filter(PUB_CODE=="AN1")%>%
+  group_by(did_churn)%>%
+  summarise(n=n_distinct(paste(CUSTOMER_NUMBER,ORDER_NUMBER)))
+
+tableau_m_a%>%
+  filter(TERM=="Annual")%>%
+  mutate(is_rolling_active=ifelse(total_visits>0,1,0))%>%
+  mutate(leading_is_active=lead(is_rolling_active))%>%
+  mutate(row_num=row_number())%>%
+  mutate(consec_terms=ifelse(is_rolling_active==1&leading_is_active==1,is_rolling_active+1,
+                             ifelse(is_rolling_active==1&leading_is_active)))
+```
+
+
+What are leading churn indicators?
+
+
+```{r}
+AN_Web_Data_Reduced_3
+
+```
+
+
+
+
+```{r}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

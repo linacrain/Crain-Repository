@@ -1,0 +1,688 @@
+---
+title: "Compilation Scrit"
+output: html_document
+date: "2024-02-06"
+---
+
+```{r}
+library(tidyverse)
+filedir<-setwd("C:\\Users\\andrew.lin\\Downloads\\an data 2022 no other files")
+file_names<-dir(filedir)
+print(file_names)
+```
+
+
+```{r}
+result<-do.call(rbind,lapply(file_names,read.csv))
+
+data_2023<-rbind(AN_01_2023_06_2023,AN_06_2023_12_2023)
+
+file_names
+```
+
+
+```{r}
+clickshare_index<-AN_2022_2023_Clickshare_index%>%
+  mutate(clickshare=`UID All (v60) (evar60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),NA,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  select(Visitor_ID,clickshare)%>%
+  filter(!is.na(clickshare))%>%
+  distinct()
+
+content_list<-c("article","video","people","data-center","model-detail","award-program","photo-gallery","event")
+
+result%>%
+  head(3000000)%>%
+  filter(str_detect(Pages,"subs:Customer-Service"))
+  group_by(Pages)%>%
+  summarise(n=n())
+  
+data_2023%>%
+  head(3000000)%>%
+  filter(str_detect(`Page Name (v6) (evar6)`,"Customer-Service/Subscription/"))
+```
+
+```{r}
+result%>%head(1000)%>%
+  filter(Content.Type..p29...prop29.=="article")
+
+
+```
+
+```{R}
+
+
+transformed_visits<-result%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="Visitor_ID"))%>%
+  filter(!is.na(clickshare))%>%
+  mutate(article_check=ifelse(`Content.Type..p29...prop29.`=="article",`Pages`,NA))%>%
+  mutate(non_article_check=ifelse((!`Content.Type..p29...prop29.`%in%content_list|is.na(`Content.Type..p29...prop29.`))&!str_detect(Pages,"subscribe")&!str_detect(Pages,"clickshare"),`Pages`,NA))%>%
+  mutate(subscribe_page_check=ifelse(str_detect(Pages,"subscribe"),Pages,NA))%>%
+  mutate(clickshare_non_account_change=ifelse(str_detect(Pages,"clickshare")&!str_detect(Pages,"add|manage|site|subscriptionCenter|update|reg|update|view"),Pages,NA))%>%
+  mutate(clickshare_account_change=ifelse(str_detect(Pages,"clickshare")&str_detect(Pages,"add|manage|site|subscriptionCenter|update|reg|update|view"),Pages,NA))%>%
+  mutate(customer_service_renewal_settings=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/SubscriptionRenewalSettings"),Pages,NA))%>%
+  mutate(customer_service_suspend=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/Suspend/"),Pages,NA))%>%
+  mutate(customer_service_hard_cancel=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/Cancel"),Pages,NA))%>%
+  mutate(customer_service_soft_cancel=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/CancelAutomaticRenewal"),Pages,NA))%>%
+  mutate(customer_service_subscription_general=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription"),Pages,NA))%>%
+  mutate(customer_service_order=ifelse(str_detect(Pages,"subs:Customer-Service/Order"),Pages,NA))%>%
+  mutate(customer_service_account=ifelse(str_detect(Pages,"subs:Customer-Service/Account"),Pages,NA))%>%
+  mutate(video_check=ifelse(`Content.Type..p29...prop29.`=="video",`Pages`,NA))%>%
+  mutate(people_check=ifelse(`Content.Type..p29...prop29.`=="people",`Pages`,NA))%>%
+  mutate(data_center_check=ifelse(`Content.Type..p29...prop29.`=="data-center",`Pages`,NA))%>%
+  mutate(model_check=ifelse(`Content.Type..p29...prop29.`=="model-detail",`Pages`,NA))%>%
+  mutate(award_check=ifelse(`Content.Type..p29...prop29.`=="award-program",`Pages`,NA))%>%
+  mutate(photo_check=ifelse(`Content.Type..p29...prop29.`=="photo-gallery",`Pages`,NA))%>%
+  mutate(event_check=ifelse(`Content.Type..p29...prop29.`=="event",`Pages`,NA))%>%
+  select(Date,`Visit.Number`,Visitor_ID,clickshare,article_check,non_article_check,Referrer.Type,Mobile.Device.Type,video_check,people_check,data_center_check,model_check,award_check,photo_check,event_check,subscribe_page_check,clickshare_non_account_change,clickshare_account_change,customer_service_suspend,customer_service_hard_cancel,customer_service_soft_cancel,customer_service_subscription_general,customer_service_order,customer_service_account)%>%
+  group_by(Visitor_ID,`Visit.Number`,Date,Mobile.Device.Type,clickshare)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            n_videos=n_distinct(video_check,na.rm=TRUE),
+            n_people=n_distinct(people_check,na.rm=TRUE),
+            n_data=n_distinct(data_center_check,na.rm=TRUE),
+            n_model=n_distinct(model_check,na.rm=TRUE),
+            n_award=n_distinct(award_check,na.rm=TRUE),
+            n_photo=n_distinct(photo_check,na.rm=TRUE),
+            n_event=n_distinct(event_check,na.rm=TRUE),
+            n_clickshare_non_account_change=n_distinct(clickshare_non_account_change,na.rm=TRUE),
+            n_clickshare_account_change=n_distinct(clickshare_account_change,na.rm=TRUE),
+            n_subscribe_pages=n_distinct(subscribe_page_check,na.rm=TRUE),
+            n_cs_suspend=n_distinct(customer_service_suspend,na.rm=TRUE),
+            n_cs_hard_cancel=n_distinct(customer_service_hard_cancel,na.rm=TRUE),
+            n_cs_soft_cancel=n_distinct(customer_service_soft_cancel,na.rm=TRUE),
+            n_cs_sub=n_distinct(customer_service_subscription_general,na.rm=TRUE),
+            n_cs_order=n_distinct(customer_service_order,na.rm=TRUE),
+            n_cs_account=n_distinct(customer_service_account,na.rm=TRUE))
+
+transformed_2023<-data_2023%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="Visitor_ID"))%>%
+  filter(!is.na(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse((!`Content Type (p29) (prop29)`%in%content_list|is.na(`Content Type (p29) (prop29)`))&!str_detect(`Page Name (v6) (evar6)`,"subscribe")&!str_detect(`Page Name (v6) (evar6)`,"clickshare"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(subscribe_page_check=ifelse(str_detect(`Page Name (v6) (evar6)`,"subscribe"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_renewal_settings=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Subscription/SubscriptionRenewalSettings"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_suspend=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Subscription/Suspend/"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_hard_cancel=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Subscription/Cancel"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_soft_cancel=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Subscription/CancelAutomaticRenewal"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_subscription_general=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Subscription"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_order=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Order"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(customer_service_account=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:Customer-Service/Account"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(clickshare_non_account_change=ifelse(str_detect(`Page Name (v6) (evar6)`,"clickshare")&!str_detect(`Page Name (v6) (evar6)`,"add|manage|site|subscriptionCenter|update|reg|update|view"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(clickshare_account_change=ifelse(str_detect(`Page Name (v6) (evar6)`,"clickshare")&str_detect(`Page Name (v6) (evar6)`,"add|manage|site|subscriptionCenter|update|reg|update|view"),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(video_check=ifelse(`Content Type (p29) (prop29)`=="video",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(people_check=ifelse(`Content Type (p29) (prop29)`=="people",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(data_center_check=ifelse(`Content Type (p29) (prop29)`=="data-center",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(model_check=ifelse(`Content Type (p29) (prop29)`=="model-detail",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(award_check=ifelse(`Content Type (p29) (prop29)`=="award-program",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(photo_check=ifelse(`Content Type (p29) (prop29)`=="photo-gallery",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(event_check=ifelse(`Content Type (p29) (prop29)`=="event",`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check,`Mobile Device Type`,video_check,people_check,data_center_check,model_check,award_check,photo_check,event_check,subscribe_page_check,clickshare_non_account_change,clickshare_account_change,customer_service_suspend,customer_service_hard_cancel,customer_service_soft_cancel,customer_service_subscription_general,customer_service_order,customer_service_account)%>%
+  group_by(Visitor_ID,`Visit Number`,Date,`Mobile Device Type`,clickshare)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            n_videos=n_distinct(video_check,na.rm=TRUE),
+            n_people=n_distinct(people_check,na.rm=TRUE),
+            n_data=n_distinct(data_center_check,na.rm=TRUE),
+            n_model=n_distinct(model_check,na.rm=TRUE),
+            n_award=n_distinct(award_check,na.rm=TRUE),
+            n_photo=n_distinct(photo_check,na.rm=TRUE),
+            n_event=n_distinct(event_check,na.rm=TRUE),
+            n_clickshare_non_account_change=n_distinct(clickshare_non_account_change,na.rm=TRUE),
+            n_clickshare_account_change=n_distinct(clickshare_account_change,na.rm=TRUE),
+            n_subscribe_pages=n_distinct(subscribe_page_check,na.rm=TRUE),
+            n_cs_suspend=n_distinct(customer_service_suspend,na.rm=TRUE),
+            n_cs_hard_cancel=n_distinct(customer_service_hard_cancel,na.rm=TRUE),
+            n_cs_soft_cancel=n_distinct(customer_service_soft_cancel,na.rm=TRUE),
+            n_cs_sub=n_distinct(customer_service_subscription_general,na.rm=TRUE),
+            n_cs_order=n_distinct(customer_service_order,na.rm=TRUE),
+            n_cs_account=n_distinct(customer_service_account,na.rm=TRUE))
+
+
+cleaned_2022_transformed<-transformed_visits%>%
+  mutate(`Visit Number`=as.double(Visit.Number),
+         `Mobile Device Type`=Mobile.Device.Type)%>%
+  ungroup()%>%
+  select(Visitor_ID,`Visit Number`,Date,`Mobile Device Type`,clickshare,n_articles,n_non_articles,n_videos,n_people,n_data,n_model,n_award,n_photo,n_event,n_clickshare_non_account_change,n_clickshare_account_change,n_subscribe_pages,n_cs_suspend,n_cs_hard_cancel,n_cs_soft_cancel,n_cs_sub,n_cs_order,n_cs_account)
+
+AN_Web_Data_Reduced_3<-rbind(cleaned_2022_transformed,transformed_2023)
+write.csv(AN_Web_Data_Reduced_3,"AN_2022_2023_Data_with_Clickshare_v4_with_customer_service_pages.csv")
+
+```
+
+```{r}
+
+data_2023%>%
+  head(100)
+  
+result%>%
+  head(1000)
+  filter(`Content.Type..p29...prop29.`=="clickshare")
+  
+write.csv(transformed_visits,"AN_2022_reduced_web_data_full.csv")
+  
+```
+
+
+```{r}
+AN_Data<-AN_Advantage_Data_2022_Onwards%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(TERM==52)%>%
+  filter(EXPIRE_DATE<as.Date("2024-01-01","%Y-%m-%d"))
+
+AN_Data
+```
+
+```{r}
+data_2023<-rbind(AN_01_2023_06_2023,AN_06_2023_12_2023)
+
+clickshare_index_2023<-AN_2023_Clickshare_index%>%
+  mutate(clickshare=`UID Clickshare (p60) (prop60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),NA,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  select(Visitor_ID,clickshare)%>%
+  filter(!is.na(clickshare))
+
+transformed_2023<-data_2023%>%
+  left_join(clickshare_index_2023,by=c("Visitor_ID"="Visitor_ID"))%>%
+  filter(!is.na(clickshare))%>%
+  mutate(article_check=ifelse(`Content Type (p29) (prop29)`=="article",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(non_article_check=ifelse(!`Content Type (p29) (prop29)`%in%content_list|is.na(`Content Type (p29) (prop29)`),`Page Name (v6) (evar6)`,NA))%>%
+  mutate(video_check=ifelse(`Content Type (p29) (prop29)`=="video",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(people_check=ifelse(`Content Type (p29) (prop29)`=="people",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(data_center_check=ifelse(`Content Type (p29) (prop29)`=="data-center",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(model_check=ifelse(`Content Type (p29) (prop29)`=="model-detail",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(award_check=ifelse(`Content Type (p29) (prop29)`=="award-program",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(photo_check=ifelse(`Content Type (p29) (prop29)`=="photo-gallery",`Page Name (v6) (evar6)`,NA))%>%
+  mutate(event_check=ifelse(`Content Type (p29) (prop29)`=="event",`Page Name (v6) (evar6)`,NA))%>%
+  select(Date,`Visit Number`,Visitor_ID,clickshare,article_check,non_article_check,`Mobile Device Type`,video_check,people_check,data_center_check,model_check,award_check,photo_check,event_check)%>%
+  group_by(Visitor_ID,`Visit Number`,Date,`Mobile Device Type`,clickshare)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_non_articles=n_distinct(non_article_check,na.rm=TRUE),
+            n_videos=n_distinct(video_check,na.rm=TRUE),
+            n_people=n_distinct(people_check,na.rm=TRUE),
+            n_data=n_distinct(data_center_check,na.rm=TRUE),
+            n_model=n_distinct(model_check,na.rm=TRUE),
+            n_award=n_distinct(award_check,na.rm=TRUE),
+            n_photo=n_distinct(photo_check,na.rm=TRUE),
+            n_event=n_distinct(event_check,na.rm=TRUE))
+
+
+cleaned_2022_transformed<-transformed_visits%>%
+  mutate(`Visit Number`=as.double(Visit.Number),
+         `Mobile Device Type`=Mobile.Device.Type)%>%
+  ungroup()%>%
+  select(Visitor_ID,`Visit Number`,Date,`Mobile Device Type`,clickshare,n_articles,n_non_articles,n_videos,n_people,n_data,n_model,n_award,n_photo,n_event)
+```
+
+```{r}
+transformed_2023%>%
+  head(10)%>%
+  mutate(`Visit.Number`=`Visit Number`,
+         )
+```
+```{r}
+AN_Web_Data_Reduced<-rbind(cleaned_2022_transformed,transformed_2023)
+write.csv(AN_Web_Data_Reduced,"AN_2022_2023_Data_with_Clickshare.csv")
+```
+
+```{r}
+first_termers_with_one_pub<-AN_Data%>%
+  filter(START_DATE>=as.Date("2022-01-01","%Y-%m-%d"))%>%
+  filter(TERM_NUMBER==1)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER),
+         SUB_ID=as.double(SUB_ID))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  mutate(n=n_distinct(ORDER_NUMBER))%>%
+  filter(n==1)%>%
+  arrange(EXPIRE_DATE,.by_group=TRUE)%>%
+  mutate(did_churn=ifelse(is.na(RENEWAL_START_DATE),1,0))%>%
+  arrange(EXPIRE_DATE,.by_group=TRUE)%>%
+  mutate(fill=1)%>%
+  spread(PUB_CODE,fill)%>%
+  mutate(AN1=ifelse(is.na(AN1),0,AN1),
+         AN2=ifelse(is.na(AN2),0,AN2),
+         AN3=ifelse(is.na(AN3),0,AN3),
+         AN4=ifelse(is.na(AN4),0,AN4))%>%
+  mutate(total_RATE=sum(RATE))%>%
+  mutate(difftime=as.numeric(difftime(RENEWAL_ORDER_DATE,EXPIRE_DATE,units="days")))%>%
+  mutate(RENEWAL_ORDER_DATE=if_else(as.numeric(difftime(RENEWAL_ORDER_DATE,EXPIRE_DATE,units="days"))>30,NA,RENEWAL_ORDER_DATE))%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="Y",1,0))%>%
+  mutate(EMAIL_ADDRESS=tolower(EMAIL_ADDRESS))%>%
+  ungroup()%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  mutate(max_rate=max(RATE))%>%
+  mutate(AN1_1=sum(AN1),
+         AN2_2=sum(AN2),
+         AN3_3=sum(AN3),
+         AN4_4=sum(AN4))%>%
+  mutate(n=n())%>%
+  filter(RATE==max_rate)%>%
+  mutate(n=n())%>%
+  filter(n==1|(n==2&AN1==1)|(n==2&AN4==1))%>%
+  mutate(RATE=total_RATE)%>%
+  mutate(AN1=AN1_1,
+         AN2=AN2_2,
+         AN3=AN3_3,
+         AN4=AN4_4)%>%
+  select(did_churn,CUSTOMER_NUMBER,EMAIL_ADDRESS,TERM_NUMBER,IS_AUTO_RENEW,START_DATE,reference_date,RATE,AN1,AN2,AN3,AN4)
+  
+  
+  
+
+first_termers_with_one_pub%>%
+  filter(CUSTOMER_NUMBER==37576963)
+```
+
+4305943	I	spocock@thecarlab.com	AN	24539555	
+4305943	I	spocock@thecarlab.com	AN	24539554	
+8236157	I	jbarker@toolingtechgroup.com	AN	24538747	
+8236157	I	jbarker@toolingtechgroup.com	AN	24538746	
+28310758	I	jbrewer@okeefellc.com	AN	24559360	
+28310758	I	jbrewer@okeefellc.com	AN	24559359	
+34043757	I	lespabrams@gmail.com	AN	24543765	
+34043757	I	lespabrams@gmail.com	AN	24543764	
+34788207	I	megan.heiden@toyodagosei.com	AN	24572199	
+34788207	
+
+```{r}
+
+```
+
+
+```{r}
+first_time_users_mult_pub<-AN_Data%>%
+  filter(START_DATE>=as.Date("2022-01-01","%Y-%m-%d"))%>%
+  filter(TERM_NUMBER==1)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER),
+         SUB_ID=as.double(SUB_ID))%>%
+  group_by(CUSTOMER_NUMBER)%>%
+  mutate(n=n_distinct(ORDER_NUMBER))%>%
+  filter(n>1)%>%
+  arrange(EXPIRE_DATE,.by_group=TRUE)%>%
+  ungroup()%>%
+  summarise(n=n_distinct(CUSTOMER_NUMBER))
+  mutate(fill=1)%>%
+  spread(PUB_CODE,fill)%>%
+  ungroup()%>%
+  group_by(CUSTOMER_NUMBER,EMAIL_ADDRESS)%>%
+  mutate(AN1=ifelse(is.na(AN1),0,AN1),
+         AN2=ifelse(is.na(AN2),0,AN2),
+         AN3=ifelse(is.na(AN3),0,AN3),
+         AN4=ifelse(is.na(AN4),0,AN4))%>%
+  mutate(difftime=as.numeric(difftime(RENEWAL_ORDER_DATE,EXPIRE_DATE,units="days")))%>%
+  mutate(RENEWAL_ORDER_DATE=if_else(as.numeric(difftime(RENEWAL_ORDER_DATE,EXPIRE_DATE,units="days"))>30,NA,RENEWAL_ORDER_DATE))%>%
+  mutate(IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="Y",1,0))%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))%>%
+  summarise(TERM_NUMBER=max(TERM_NUMBER),
+            IS_AUTO_RENEW=max(IS_AUTO_RENEW),
+            START_DATE=min(START_DATE),
+            reference_date=max(reference_date),
+            RATE=sum(RATE),
+            renewal_count=n_distinct(RENEWAL_ORDER_DATE,na.rm=TRUE),
+            AN1=sum(AN1),
+            AN2=sum(AN2),
+            AN3=sum(AN3),
+            AN4=sum(AN4))%>%
+  mutate(did_churn=ifelse(renewal_count<1,1,0))%>%
+  mutate(EMAIL_ADDRESS=tolower(EMAIL_ADDRESS))%>%
+  select(did_churn,CUSTOMER_NUMBER,EMAIL_ADDRESS,TERM_NUMBER,IS_AUTO_RENEW,START_DATE,reference_date,RATE,AN1,AN2,AN3,AN4)
+
+
+
+first_time_users_full<-rbind(first_termers_with_one_pub,first_time_users_mult_pub)
+
+first_time_users_full
+```
+
+```{r}
+library(DBI)
+library(RPostgres)
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+zinfo <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'zoominfo',
+               sslmode='require')
+
+query_2<-'select userid,am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid from staging.clickshare_an_stg'
+
+clickshare_stuff<-dbGetQuery(prod,query_2)
+
+clickshare_list<-clickshare_stuff%>%
+  mutate(am1_subscriberid=ifelse(am1_subscriberid=='',NA,am1_subscriberid),
+         an1_subscriberid=ifelse(an1_subscriberid=='',NA,an1_subscriberid),
+         an2_subscriberid=ifelse(an2_subscriberid=='',NA,an2_subscriberid),
+         an3_subscriberid=ifelse(an3_subscriberid=='',NA,an3_subscriberid),
+         an4_subscriberid=ifelse(an4_subscriberid=='',NA,an4_subscriberid))%>%
+  mutate(sub_id=coalesce(am1_subscriberid,an1_subscriberid,an2_subscriberid,an3_subscriberid,an4_subscriberid))%>%
+  dplyr::select(userid,sub_id)%>%
+  filter(!is.na(sub_id))%>%
+  mutate(sub_id=as.double(sub_id))
+
+masterkey<-"select * from reporting.customer_master_reference where businessunitcode='AN'"
+
+demo<-"select * from reporting.mv_tbl__customer_demographic_an_mv__0"
+
+demographics<-dbGetQuery(zinfo,demo)
+
+dem_info<-demographics%>%
+  dplyr::select(clickshareusername,businddescription,promotesubscriptions,promoteeditorial,promoteevents,promotewebinars,promotethirdparty,promoteadvertising,isactivesubscriber)%>%
+  mutate(clickshareusername=tolower(clickshareusername))
+```
+
+```{r}
+op<-first_termers_with_one_pub%>%
+  left_join(dem_info,by=c("EMAIL_ADDRESS"="clickshareusername"))%>%
+  separate(businddescription,into=c('business','business_detail'),sep="-")%>%
+  mutate(business=ifelse(business=="AWAITING CLASSIFICATION"|business=="COMP "|str_detect(business,"NON")|business=="unknown"|is.na(business),"Other/Unknown",business))%>%
+  select(-c(business_detail,isactivesubscriber))%>%
+  mutate(promote_subscriptions=ifelse(is.na(promotesubscriptions)|promotesubscriptions=="N",0,1),
+         promote_editorial=ifelse(is.na(promoteeditorial)|promoteeditorial=="N",0,1),
+         promote_events=ifelse(is.na(promoteevents)|promoteevents=="N",0,1),
+         promote_third=ifelse(is.na(promotethirdparty)|promotethirdparty=="N",0,1),
+         promote_webinar=ifelse(is.na(promotewebinars)|promotewebinars=="N",0,1),
+         promote_ads=ifelse(is.na(promoteadvertising)|promoteadvertising=="N",0,1))%>%
+  select(-c(promotesubscriptions,promoteeditorial,promoteevents,promotethirdparty,promotewebinars,promoteadvertising))%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  left_join(AN_2022_2023_Data_with_Clickshare_v2,by=c("userid"="clickshare"))%>%
+  mutate(Date=as.Date(Date,"%B %d, %Y"))%>%
+  mutate(datediff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(vis_id_number=paste(Visitor_ID,`Visit Number`,sep="_"))%>%
+  mutate(vis_id_number=ifelse(Date>reference_date|Date<START_DATE,NA,vis_id_number),
+         Date=if_else(Date>reference_date|Date<START_DATE,NA,Date),
+         `Mobile Device Type`=ifelse(Date>reference_date|Date<START_DATE,NA,`Mobile Device Type`),
+         n_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_articles),
+         n_non_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_non_articles),
+         n_videos=ifelse(Date>reference_date|Date<START_DATE,NA,n_videos),
+         n_people=ifelse(Date>reference_date|Date<START_DATE,NA,n_people),
+         n_data=ifelse(Date>reference_date|Date<START_DATE,NA,n_data),
+         n_model=ifelse(Date>reference_date|Date<START_DATE,NA,n_model),
+         n_award=ifelse(Date>reference_date|Date<START_DATE,NA,n_award),
+         n_photo=ifelse(Date>reference_date|Date<START_DATE,NA,n_photo),
+         n_event=ifelse(Date>reference_date|Date<START_DATE,NA,n_event))%>%
+  mutate(fill=1)%>%
+  spread(`Mobile Device Type`,fill)
+
+op
+
+test<-op[,-40]%>%
+  mutate(mobile_visits=ifelse(is.na(`Mobile Phone`),0,`Mobile Phone`),
+         other_visits=ifelse(is.na(Other),0,Other),
+         tablet_visits=ifelse(is.na(Tablet),0,Tablet),
+         television_visits=ifelse(is.na(Television),0,Television))%>%
+  select(-c(`Mobile Phone`,Other,Tablet,Television))%>%
+  mutate(contract_time_period=as.numeric(difftime(reference_date,START_DATE,units="days")))%>%
+  mutate(START_DATE=as.Date(START_DATE,"%Y-%m-%d"),
+         reference_date=as.Date(reference_date,"%Y-%m-%d"))%>%
+  mutate(date_period=ifelse(datediff>=contract_time_period-90,1,
+                            ifelse(datediff<contract_time_period-90&datediff>=contract_time_period-180,2,
+                                   ifelse(datediff<contract_time_period-180&datediff>=contract_time_period-270,3,4))))%>%
+  mutate(ref_90_date=if_else(date_period==1,START_DATE+90,
+                            if_else(date_period==2,START_DATE+180,
+                                   if_else(date_period==3,START_DATE+270,reference_date))))%>%
+  mutate(date_period=ifelse(is.na(vis_id_number),NA,date_period))%>%
+  select(-c(contract_time_period,datediff,Visitor_ID,`Visit Number`))%>%
+  group_by(did_churn,CUSTOMER_NUMBER,EMAIL_ADDRESS,TERM_NUMBER,IS_AUTO_RENEW,START_DATE,reference_date,RATE,AN1,AN2,AN3,AN4,business,promote_subscriptions,promote_editorial,promote_events,promote_third,promote_webinar,promote_ads,date_period,ref_90_date)%>%
+  summarise(most_recent_date=max(Date,na.rm=TRUE),
+            articles=sum(n_articles,na.rm=TRUE),
+            non_articles=sum(n_non_articles,na.rm=TRUE),
+            videos=sum(n_videos,na.rm=TRUE),
+            people_pages=sum(n_people,na.rm=TRUE),
+            data_center=sum(n_data,na.rm=TRUE),
+            model_details=sum(n_model,na.rm=TRUE),
+            award_programs=sum(n_award,na.rm=TRUE),
+            photo_galleries=sum(n_photo,na.rm=TRUE),
+            events=sum(n_event,na.rm=TRUE),
+            mobile_visits=sum(mobile_visits),
+            other_visits=sum(other_visits),
+            tablet_visits=sum(tablet_visits),
+            television_visits=sum(television_visits))%>%
+  ungroup()%>%
+  mutate(recency=ifelse(is.na(most_recent_date),90,
+                        as.numeric(difftime(ref_90_date,most_recent_date,units="days"))))%>%
+  select(-c(ref_90_date,most_recent_date))%>%
+  mutate(recency=ifelse(is.infinite(recency),90,recency))
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles","videos","people_pages","data_center","model_details","award_programs","photo_galleries","events","mobile_visits","other_visits","tablet_visits","television_visits"),names_sep="_",id_cols=CUSTOMER_NUMBER)%>%
+  select(-c(articles_NA,non_articles_NA,videos_NA,people_pages_NA,data_center_NA,model_details_NA,award_programs_NA,photo_galleries_NA,events_NA,mobile_visits_NA,other_visits_NA,tablet_visits_NA,television_visits_NA,recency_NA))%>%
+  mutate_if(is.numeric,replace_na,replace=0)
+  
+
+annual_first_term_users<-test%>%
+  distinct()%>%
+  pivot_wider(names_from=date_period,values_from=c("recency","articles","non_articles","videos","people_pages","data_center","model_details","award_programs","photo_galleries","events","mobile_visits","other_visits","tablet_visits","television_visits"),names_sep="_",values_fn={max})%>%
+  select(-c(articles_NA,non_articles_NA,videos_NA,people_pages_NA,data_center_NA,model_details_NA,award_programs_NA,photo_galleries_NA,events_NA,mobile_visits_NA,other_visits_NA,tablet_visits_NA,television_visits_NA,recency_NA))%>%
+  mutate_if(is.numeric,replace_na,replace=0)
+```
+
+```{r}
+annual_first_term_users
+
+cluster_features<-annual_first_term_users%>%
+  mutate(fill=1)%>%
+  spread(business,fill)%>%
+  mutate_if(is.numeric,replace_na,replace=0)%>%
+  select(-c(CUSTOMER_NUMBER,EMAIL_ADDRESS,TERM_NUMBER,START_DATE,reference_date,RATE))%>%
+  mutate(b_prof=`Professional Services `,)
+
+pca_features<-cluster_features%>%
+  filter(television_visits_1==0)%>%
+  mutate(b_manufacturing=`Manufacturing `,
+         b_other=`Other/Unknown`,
+         b_prof_serv=`Professional Services `,
+         b_retail=`Retail `)%>%
+  select(-c(television_visits_1,television_visits_2,television_visits_3,television_visits_4))%>%
+  select(-cluster)%>%
+  mutate_if(is.numeric,scale)
+
+corrplot(cor(pca_features))
+
+data.pca<-princomp(cor(pca_features))
+summary(data.pca)
+
+sc_cluster<-cluster_features%>%
+  mutate_if(is.numeric,scale)%>%
+  
+
+sc_cluster
+
+gower_mat<-as.matrix(sc_cluster)
+gower_dist<-daisy(sc_cluster,metric="gower")
+```
+
+```{r}
+data.pca$loadings[,1:13]
+```
+```{r}
+fviz_pca_var(data.pca, col.var = "black")
+```
+
+
+
+```{r}
+
+sil_width = c(NA)
+
+for(i in 2:20)
+{
+  pam_fit = pam(gower_dist, diss = TRUE, k=i)
+  sil_width[i] = pam_fit$silinfo$avg.width
+}
+
+plot(1:20,sil_width,xlab="Number of Clusters",ylab="Silhouette width")
+lines(1:20, sil_width)
+```
+```{r}
+pam_fit = pam(gower_dist, diss=TRUE, k=2)
+
+cluster_features$cluster<-pam_fit$clustering
+
+tsne_obj = Rtsne(gower_dist,is_distance = TRUE)
+
+annual_plot = data.frame(tsne_obj$Y)
+
+names(annual_plot) = c("X","Y")
+
+annual_plot$cluster = as.factor(cluster_features$cluster)
+
+ggplot(aes(x=X, y=Y), data=annual_plot) + geom_point(aes(color=cluster))
+```
+
+```{r}
+pam_results<-cluster_features%>%
+  mutate(did_churn=as.factor(did_churn))%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW))%>%
+  mutate(AN1=as.factor(AN1),
+         AN2=as.factor(AN2),
+         AN3=as.factor(AN3),
+         AN4=as.factor(AN4),
+         promote_subscriptions=as.factor(promote_subscriptions),
+         promote_editorial=as.factor(promote_editorial),
+         promote_events=as.factor(promote_events),
+         promote_third=as.factor(promote_third),
+         promote_webinar=as.factor(promote_webinar),
+         `Manufacturing `=as.factor(`Manufacturing `),
+         `Other/Unknown`=as.factor(`Other/Unknown`),
+         `Professional Services `=as.factor(`Professional Services `),
+         `Retail `=as.factor(`Retail `))%>%
+  group_by(cluster)%>%
+  do(the_summary=summary(.))
+
+pam_results$the_summary
+```
+```{r}
+set.seed(10310)
+rctrl1 <- rfeControl(method = "cv",
+                     number = 5,
+                     returnResamp = "all",
+                     functions = caretFuncs,
+                     saveDetails = TRUE)
+
+xg_features<-cluster_features%>%
+  select(-cluster)
+
+feat<-xg_features%>%
+  mutate(b_manufacturing=`Manufacturing `,
+         b_other=`Other/Unknown`,
+         b_prof_serv=`Professional Services `,
+         b_retail=`Retail `)%>%
+  select(-c(`Manufacturing `,`Other/Unknown`,`Professional Services `,`Retail `))
+
+index<-createDataPartition(y=feat$did_churn,p=0.8,list=FALSE)
+
+train_set<-feat[index,]
+test_set<-feat[-index,]
+
+train_set%>%
+  colnames()
+
+train<-sparse.model.matrix(did_churn~.,train_set)[,-1]
+test<-sparse.model.matrix(did_churn~.,feat[-index,])[,-1]
+
+xg1<-xgboost(data=train,label=train_set$did_churn,max.depth=2,eta=0.3,nround=20,objective="binary:logistic",scale_pos_weight=4.24,eval_metric="aucpr")
+
+importance_matrix = xgb.importance(colnames(train), model = xg1)
+importance_matrix
+
+xgb.plot.importance(importance_matrix[1:10,])
+```
+
+```{r}
+pred_1<-predict(xg1,test)
+test_set$pred_1<-as.numeric(pred_1>0.5)
+
+confusionMatrix(as.factor(test_set$did_churn),as.factor(test_set$pred_1))
+```
+
+```{r}
+train_2<-train_set%>%
+  select(did_churn,IS_AUTO_RENEW,AN1,AN2,AN3,AN4,recency_1,articles_1,other_visits_1,recency_4,non_articles_4,recency_2,articles_2,non_articles_1,other_visits_4)
+
+train_2_feat<-sparse.model.matrix(did_churn~.,train_2)[,-1]
+test_2<-test_set%>%
+  select(did_churn,IS_AUTO_RENEW,AN1,AN2,AN3,AN4,recency_1,articles_1,other_visits_1,recency_4,non_articles_4,recency_2,articles_2,non_articles_1,other_visits_4)
+
+test_2_feat<-sparse.model.matrix(did_churn~.,test_2)[,-1]
+  
+
+model_2<-xg1<-xgboost(data=train_2_feat,label=train_2$did_churn,max.depth=2,eta=0.3,nround=20,objective="binary:logistic",scale_pos_weight=4.24,eval_metric="aucpr")
+
+pred_2<-predict(model_2,test_2_feat)
+test_set$pred_2<-as.numeric(pred_2>0.5)
+
+confusionMatrix(as.factor(test_set$did_churn),as.factor(test_set$pred_2))
+imp
+```
+
+```{r}
+importance_matrix = xgb.importance(colnames(train_2_feat), model = model_2)
+importance_matrix
+
+xgb.plot.importance(importance_matrix[1:10,])
+```
+
+
+```{r}
+data_set<-cluster_features%>%
+  filter(television_visits_1==0)%>%
+  mutate(b_manufacturing=`Manufacturing `,
+         b_other=`Other/Unknown`,
+         b_prof_serv=`Professional Services `,
+         b_retail=`Retail `)%>%
+  select(-c(television_visits_1,television_visits_2,television_visits_3,television_visits_4,`Manufacturing `,`Other/Unknown`,`Professional Services `,`Retail `))%>%
+  select(-cluster)
+
+index<-createDataPartition(y=data_set$did_churn,p=0.8,list=FALSE)
+
+train_set<-data_set[index,]
+test_set<-data_set[-index,]
+```
+
+
+```{r}
+train_feats<-train_set%>%
+  select(-c(recency_3,recency_4,articles_3,articles_4,non_articles_3,non_articles_4,videos_3,videos_4,people_pages_3,people_pages_4,data_center_3,data_center_4,model_details_3,model_details_4,award_programs_3,award_programs_4,photo_galleries_3,photo_galleries_4,events_3,events_4,mobile_visits_3,mobile_visits_4,other_visits_3,other_visits_4,tablet_visits_3,tablet_visits_4))
+
+test_feat<-test_set%>%
+  select(-c(recency_3,recency_4,articles_3,articles_4,non_articles_3,non_articles_4,videos_3,videos_4,people_pages_3,people_pages_4,data_center_3,data_center_4,model_details_3,model_details_4,award_programs_3,award_programs_4,photo_galleries_3,photo_galleries_4,events_3,events_4,mobile_visits_3,mobile_visits_4,other_visits_3,other_visits_4,tablet_visits_3,tablet_visits_4))
+
+train_first_six_months<-sparse.model.matrix(did_churn~.,train_feats)[,-1]
+test_first_six_months<-sparse.model.matrix(did_churn~.,test_feat)[,-1]
+
+train_first_six_model<-xgboost(train_first_six_months,train_feats$did_churn,max.depth=2,eta=0.1,nround=20,objective="binary:logistic",scale_pos_weight=4.24,eval_metric="aucpr")
+```
+
+
+
+```{r}
+importance_matrix_1 = xgb.importance(colnames(train_first_six_months), model = train_first_six_model)
+importance_matrix_1
+
+xgb.plot.importance(importance_matrix_1[1:10,])
+```
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+

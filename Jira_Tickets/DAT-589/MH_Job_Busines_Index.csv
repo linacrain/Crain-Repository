@@ -1,0 +1,126 @@
+﻿ID,Value,Code
+"""01""|",Administrator (01),B
+"""27""|",Board Chairman (27),B
+"""30""|",Board Member/Officer (30),B
+"""28""|",Board President (28),B
+"""29""|",Board Vice Chairman (29),B
+"""77""|",Chair Informatics Committee (77),B
+"""03""|",Chief Executive Officer (03),B
+"""74""|",Department Chair (74),B
+"""71""|",Executive Director (71),B
+"""70""|",Partner/Principle Owner (70),B
+"""02""|",President (02),B
+"""06""|",Assistant Administrator (06),B
+"""31""|",Business Manager (31),B
+"""05""|",Chief Operating Officer/COO (05),B
+"""49""|",Chief Strategy Officer (49),B
+"""04""|",Exec VP/ Ast VP/ VP (04),B
+"""76""|",Other Administrative Personnel (76),B
+"""47""|",VP- Other (47),B
+"""24""|",Chief Accountant (24),B
+"""08""|",Chief Financial Officer (08),B
+"""33""|",Controller (33),B
+"""67""|",Financial Analyst (67),B
+"""34""|",VP/Dir Finance (34),B
+"""80""|",VP/Dir Revenue Cycle (80),B
+"""21""|",CIO (21),B
+"""91""|",Chief Data/Analytics Officer (91),B
+"""61""|",Chief Security Officer (61),B
+"""45""|",Chief Technology Officer (45),B
+"""22""|",Data Processing Manager (22),B
+"""57""|",Dir/Mgr Coding/DRG (57),B
+"""59""|",Dir/Mgr Data Processing (59),B
+"""62""|",Dir/Mgr E-Health (62),B
+"""50""|",Dir/Mgr Information Systems (50),B
+"""58""|",Dir/Mgr Network MIS (58),B
+"""52""|",Dir/Mgr Network/Internet/Intranet (52),B
+"""53""|",Dir/Mgr Technical Services (53),B
+"""55""|",Dir/Mgr Telecommunications (55),B
+"""90""|",Health Information Admin (90),B
+"""11""|",Medical Records Administrator (11),B
+"""60""|",PACS Administrator (60),B
+"""66""|",System Analyst (66),B
+"""46""|",VP/Dir MIS (46),B
+"""56""|",SYS Integrator/Analyst,B
+"""54""|",Dir/Mgr/Chf Med Records,B
+"""92""|",Acquisitions & Dev Exec (92),B
+"""63""|",Chief Compliance Officer (63),B
+"""87""|",Chief Diversity Officer (87),B
+"""86""|",Chief Marketing Officer (86),B
+"""65""|",Lawyer/Counsel (65),B
+"""89""|",Sustainability Director (89),B
+"""88""|",VP of Talent Strategies (88),B
+"""40""|",VP/Dir Engineering (40),B
+"""39""|",VP/Dir Facilities (39),B
+"""41""|",VP/Dir Marketing (41),B
+"""13""|",VP/Dir Planning/Development (13),B
+"""42""|",VP/Dir PR (42),B
+"""14""|",VP/Dir/Mgr HR (14),B
+"""25""|",Admissions Director (25),B
+"""85""|",Chief Experience Officer (85),B
+"""35""|",Compliance/Privacy Officer (35),B
+"""09""|",Dir Managed Care (09),B
+"""23""|",Dir Patient Services/Safety (23),B
+"""36""|",Dir Quality (36),B
+"""73""|",Director of Clinical Services (73),B
+"""72""|",PHO Director (72),B
+"""10""|",Risk Manager (10),B
+"""38""|",VP/Dir/Admin Radiology (38),B
+"""19""|",Ast. Dir Nursing (19),B
+"""83""|",Chief Nursing Informatics Officer (83),B
+"""16""|",Chief of Staff (16),B
+"""17""|",Chief/Dir Pharmacy/Formulary (17),B
+"""68""|",CMIO (68),B
+"""15""|",CMO/Medical Director (15),B
+"""64""|",CNO/CNE (64),B
+"""84""|",Dir/Mgr Long-Term Care Admin (84),B
+"""18""|",Dir Nursing (18),B
+"""93""|",Nurse (93),B
+"""48""|",Physician (48),B
+"""81""|",VP Clinical Informatics/CCIO (81),B
+"""78""|",VP Clinical Quality (78),B
+"""82""|",VP/Dir Clinical Engineering (82),B
+"""44""|",VP/Dir Health Services (44),B
+"""43""|",VP/Dir Medical Affairs (43),B
+"""51""|",VP/Dir/Mgr Medical Informatics (51),B
+"""07""|",Chief Purchasing Officer  (07),B
+"""37""|",Dir/Mgr of Supply Chain (37),B
+"""12""|",Vice President of Supply Chain (12),B
+"""32""|",VP/Dir Materials Management (32),B
+"""99""|",Other hospital/healthcare executives not listed above (99),B
+AB|,Children's (AB),J
+AC|,General/Acute (AC),J
+AF|,Psychiatric/Behavioral (AF),J
+AD|,Rehabilitation (AD),J
+AG|,Special (other than in list) (AG),J
+AA|,Undefined (AA),J
+AE|,Women's/Maternity (AE),J
+AI|,Long Term Care (AI),J
+AH|,Multi-Hospital System/IDN (AH),J
+G|,Government (G),J
+N|,Non-Profit (N),J
+P|,Private (P),J
+BA|,HMO/PPO/Managed Care (BA),J
+BF|,Academic Medical Center (BF),J
+BD|,Ambulatory Surgery Center (BD),J
+BC|,Medical Group/Clinic (BC),J
+CC|,Nursing Home/Hospice  (CC),J
+DL|,Accounting/Investment/Insurance Company (DL),J
+DM|,Ad Agency/PR/Publishing/Media (DM),J
+DA|,Architect/Construction/Design Firm (DA),J
+DS|,Finance (DS),J
+DB|,Consultants (DB),J
+DC|,Government/Voluntary Health Org/Non-Profit (DC),J
+DD|,Healthcare Group Purchasing Org (DD),J
+DO|,IT Vendor/Software Developer (DO),J
+DQ|,Laboratory/Imaging Center (DQ),J
+DK|,Library- Non Hospital (DK),J
+EE|,Other Healthcare Organization (EE),J
+DP|,Pharmaceutical/Biotech (DP),J
+DI|,Professional Association (DI),J
+DN|,Recruiting/Search Firm (DN),J
+DJ|,School/University (DJ),J
+DE|,Vendor/Supplier (DE),J
+DR|,Real Estate (DR),J
+DF|,Dealers/Hospital/Equip/Services,J
+DG|,Physician Private Practice,J

@@ -1,0 +1,1085 @@
+---
+title: "Content Analysis AA"
+author: "Andrew Lin"
+date: "2024-03-28"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+filedir<-setwd("C:\\Users\\andrew.lin\\Downloads\\AA_Content_2022")#2023
+filedir<-setwd("C:\\Users\\andrew.lin\\Downloads\\AA Content 2022_true")#true 2022
+file_names<-dir(filedir)
+print(file_names)
+```
+
+
+```{r}
+result<-do.call(rbind,lapply(file_names,read.csv))
+
+data_2022<-do.call(rbind,lapply(file_names_2,read.csv))
+
+n<-result%>%
+  group_by(Channels)%>%
+  filter(Article.Length.flag..p43...prop43.=="full")%>%
+  summarise(n=n_distinct(paste(Visitor_ID,Visit.Number)))%>%
+  arrange(desc(n))
+```
+```{r}
+f<-data_2022%>%
+  group_by(Channels)%>%
+  filter(Article.Length.flag..p43...prop43.=="full")%>%
+  summarise(n=n_distinct(paste(Visitor_ID,Visit.Number)))%>%
+  arrange(desc(n))
+
+f%>%
+  left_join(n,by=c("Channels"="Channels"))%>%
+  mutate(total=n.x+n.y)%>%
+  select(Channels,total)%>%
+  arrange(desc(total))
+
+list_of_top_20_channels<-c("Marketing News & Strategy","Digital Marketing & Ad Tech News","work","Agency News","Special Report: Super Bowl","Media","Opinion","Special Report: Creativity Top 5","Hot Spots","Special Report: Agency A-List & Creativity Awards","Datacenter","Year in Review","Special Report: Cannes Lions","Advertising News","Podcast: Marketer's Brief","Creativity","Ad Age Events","Ad Age Video","Special Report: 40 Under 40","Advertising")
+
+list<-channel_sums_data_2022%>%
+  left_join(reuslt_channels,by=c("Channels"="Channels"))%>%
+  mutate(across(where(is.numeric),~replace_na(.x,0)))%>%
+  mutate(summ=n.x+n.y)%>%
+  mutate(total=sum(summ))%>%
+  mutate(cumsumtotal=cumsum(summ))%>%
+  mutate(share=round(cumsumtotal/total*100,1))%>%
+  select(-c(n.x,n.y))%>%
+  mutate(Channels=ifelse(share>95,"Other",Channels))%>%
+  ungroup()%>%
+  group_by(Channels)%>%
+  summarise(f=sum(summ))%>%
+  arrange(desc(Channels))
+
+
+list$Channels
+```
+
+```{r}
+clickshare_index<-AA_2022_2023_Clickshare_Index%>%
+  mutate(clickshare=`UID All (v60) (evar60)`)%>%
+  mutate(clickshare=ifelse(clickshare=="NO_ID"|is.na(clickshare),NA,clickshare))%>%
+  mutate(clickshare=as.double(clickshare))%>%
+  select(Visitor_ID,clickshare)%>%
+  filter(!is.na(clickshare))%>%
+  distinct()
+
+result
+
+data_2022
+
+```
+
+```{r}
+transformed_visits<-result%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="Visitor_ID"))%>%
+  filter(!is.na(clickshare))%>%
+  mutate(article_check=ifelse(`Content.Type..p29...prop29.`=="article"&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(marketing_news_strategy=ifelse(str_detect(Channels,"Marketing News & Strategy")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(digital_marketing_and_tech_news=ifelse(str_detect(Channels,"Digital Marketing & Ad Tech News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(work=ifelse(str_detect(Channels,"work")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(agency_news=ifelse(str_detect(Channels,"Agency News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_super_bowl=ifelse(str_detect(Channels,"Special Report: Super Bowl")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(media=ifelse(str_detect(Channels,"Media")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(opinion=ifelse(str_detect(Channels,"Opinion")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_creativity_top_5=ifelse(str_detect(Channels,"Special Report: Creativity Top 5")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(hot_spots=ifelse(str_detect(Channels,"Hot Spots")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(agency_a_list_creativity_awards=ifelse(str_detect(Channels,"Special Report: Agency A-List & Creativity Awards")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(data_center_channel=ifelse(str_detect(Channels,"Datacenter")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(year_in_review=ifelse(str_detect(Channels,"Year in Review")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(cannes_lions=ifelse(str_detect(Channels,"Special Report: Cannes Lions")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(advertising_news=ifelse(str_detect(Channels,"Advertising News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(podcast_marketers_brief=ifelse(str_detect(Channels,"Podcast: Marketer's Brief")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(creativity_channel=ifelse(str_detect(Channels,"Creativity")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(ad_age_events=ifelse(str_detect(Channels,"Ad Age Events")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(ad_age_videos=ifelse(str_detect(Channels,"Ad Age Video")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_40_under_40=ifelse(str_detect(Channels,"Special Report: 40 Under 40")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(advertising=ifelse(str_detect(Channels,"Advertising")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_agency_a_list=ifelse(str_detect(Channels,"Special Report: Agency A-List")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_leading_women=ifelse(str_detect(Channels,"Special Report: Leading Women")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_small_agency=ifelse(str_detect(Channels,"Special Report: Small Agency Conference and Awards")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(creativity_news=ifelse(str_detect(Channels,"Creativity News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(best_places_to_work=ifelse(str_detect(Channels,"Best Places to Work")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_tv_upfront=ifelse(str_detect(Channels,"Special Report: TV Upfront")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  
+  mutate(other_channel=ifelse(!Channels%in%list$Channels&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(clickshare_account_change=ifelse(str_detect(Pages,"clickshare")&str_detect(Pages,"add|manage|site|subscriptionCenter|update|reg|update|view"),Pages,NA))%>%
+  mutate(customer_service_renewal_settings=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/SubscriptionRenewalSettings"),Pages,NA))%>%
+  mutate(customer_service_suspend=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/Suspend/"),Pages,NA))%>%
+  mutate(customer_service_hard_cancel=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/Cancel"),Pages,NA))%>%
+  mutate(customer_service_soft_cancel=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription/CancelAutomaticRenewal"),Pages,NA))%>%
+  mutate(customer_service_subscription_general=ifelse(str_detect(Pages,"subs:Customer-Service/Subscription"),Pages,NA))%>%
+  mutate(customer_service_order=ifelse(str_detect(Pages,"subs:Customer-Service/Order"),Pages,NA))%>%
+  mutate(customer_service_account=ifelse(str_detect(Pages,"subs:Customer-Service/Account"),Pages,NA))%>%
+  group_by(Visitor_ID,`Visit.Number`,Date,Mobile.Device.Type,clickshare,Referrers)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_clickshare_account_change=n_distinct(clickshare_account_change,na.rm=TRUE),
+            n_cs_hard_cancel=n_distinct(customer_service_hard_cancel,na.rm=TRUE),
+            n_cs_soft_cancel=n_distinct(customer_service_soft_cancel,na.rm=TRUE),
+            n_cs_sub=n_distinct(customer_service_subscription_general,na.rm=TRUE),
+            n_cs_order=n_distinct(customer_service_order,na.rm=TRUE),
+            n_cs_account=n_distinct(customer_service_account,na.rm=TRUE),
+            n_cs_suspend=n_distinct(customer_service_suspend,na.rm=TRUE),
+            n_marketing_news_strategy=n_distinct(marketing_news_strategy,na.rm=TRUE),
+            n_digital_marketing_tech_news=n_distinct(digital_marketing_and_tech_news,na.rm=TRUE),
+            n_work=n_distinct(work,na.rm=TRUE),
+            n_agency_news=n_distinct(agency_news,na.rm=TRUE),
+            n_special_report_super_bowl=n_distinct(special_report_super_bowl,na.rm=TRUE),
+            n_media=n_distinct(media,na.rm=TRUE),
+            n_opinion=n_distinct(opinion,na.rm=TRUE),
+            n_special_report_creativity_top_5=n_distinct(special_report_creativity_top_5,na.rm=TRUE),
+            n_hot_spots=n_distinct(hot_spots,na.rm=TRUE),
+            n_agency_a_list=n_distinct(agency_a_list_creativity_awards,na.rm=TRUE),
+            n_data_center_channel=n_distinct(data_center_channel,na.rm=TRUE),
+            n_year_in_review=n_distinct(year_in_review,na.rm=TRUE),
+            n_cannes_lions=n_distinct(cannes_lions,na.rm=TRUE),
+            n_advertising_news=n_distinct(advertising_news,na.rm=TRUE),
+            n_podcast_marketers_brief=n_distinct(podcast_marketers_brief,na.rm=TRUE),
+            n_creativity_channel=n_distinct(creativity_channel,na.rm=TRUE),
+            n_adage_events=n_distinct(ad_age_events,na.rm=TRUE),
+            n_adage_videos=n_distinct(ad_age_videos,na.rm=TRUE),
+            n_special_report_40_under_40=n_distinct(special_report_40_under_40,na.rm=TRUE),
+            n_advertising=n_distinct(advertising,na.rm=TRUE),
+            n_special_report_agency_a_list=n_distinct(special_report_agency_a_list,na.rm=TRUE),
+            n_special_report_leading_women=n_distinct(special_report_leading_women,na.rm=TRUE),
+            n_special_report_small_agency=n_distinct(special_report_small_agency,na.rm=TRUE),
+            n_creativity_news=n_distinct(creativity_news,na.rm=TRUE),
+            n_best_places_to_work=n_distinct(best_places_to_work,na.rm=TRUE),
+            n_special_report_tv_upfront=n_distinct(special_report_tv_upfront,na.rm=TRUE),
+            n_other_channel=n_distinct(other_channel,na.rm=TRUE))
+
+transformed_2022<-data_2022%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="Visitor_ID"))%>%
+  filter(!is.na(clickshare))%>%
+  mutate(article_check=ifelse(`Content.Type..p29...prop29.`=="article",`Pages`,NA))%>%
+  mutate(customer_service_renewal_settings=ifelse(str_detect(`Pages`,"subs:Customer-Service/Subscription/SubscriptionRenewalSettings"),`Pages`,NA))%>%
+  mutate(data_center_pages=ifelse(str_detect(Pages,"/datacenter/")&!str_detect(`Content.Type..p29...prop29.`,"section|article"),Pages,NA))%>%
+  mutate(customer_service_suspend=ifelse(str_detect(`Pages`,"subs:Customer-Service/Subscription/Suspend/"),`Pages`,NA))%>%
+  mutate(customer_service_hard_cancel=ifelse(str_detect(`Pages`,"subs:Customer-Service/Subscription/Cancel"),`Pages`,NA))%>%
+  mutate(customer_service_soft_cancel=ifelse(str_detect(`Pages`,"subs:Customer-Service/Subscription/CancelAutomaticRenewal"),`Pages`,NA))%>%
+  mutate(customer_service_subscription_general=ifelse(str_detect(`Pages`,"subs:Customer-Service/Subscription"),`Pages`,NA))%>%
+  mutate(customer_service_order=ifelse(str_detect(`Pages`,"subs:Customer-Service/Order"),`Pages`,NA))%>%
+  mutate(customer_service_account=ifelse(str_detect(`Pages`,"subs:Customer-Service/Account"),`Pages`,NA))%>%
+  mutate(clickshare_account_change=ifelse(str_detect(`Pages`,"clickshare")&str_detect(`Pages`,"add|manage|site|subscriptionCenter|update|reg|update|view"),`Pages`,NA))%>%
+  mutate(marketing_news_strategy=ifelse(str_detect(Channels,"Marketing News & Strategy")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(digital_marketing_and_tech_news=ifelse(str_detect(Channels,"Digital Marketing & Ad Tech News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(work=ifelse(str_detect(Channels,"work")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(agency_news=ifelse(str_detect(Channels,"Agency News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_super_bowl=ifelse(str_detect(Channels,"Special Report: Super Bowl")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(media=ifelse(str_detect(Channels,"Media")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(opinion=ifelse(str_detect(Channels,"Opinion")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_creativity_top_5=ifelse(str_detect(Channels,"Special Report: Creativity Top 5")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(hot_spots=ifelse(str_detect(Channels,"Hot Spots")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(agency_a_list_creativity_awards=ifelse(str_detect(Channels,"Special Report: Agency A-List & Creativity Awards")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(data_center_channel=ifelse(str_detect(Channels,"Datacenter")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(year_in_review=ifelse(str_detect(Channels,"Year in Review")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(cannes_lions=ifelse(str_detect(Channels,"Special Report: Cannes Lions")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(advertising_news=ifelse(str_detect(Channels,"Advertising News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(podcast_marketers_brief=ifelse(str_detect(Channels,"Podcast: Marketer's Brief")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(creativity_channel=ifelse(str_detect(Channels,"Creativity")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(ad_age_events=ifelse(str_detect(Channels,"Ad Age Events")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(ad_age_videos=ifelse(str_detect(Channels,"Ad Age Video")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_40_under_40=ifelse(str_detect(Channels,"Special Report: 40 Under 40")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(advertising=ifelse(str_detect(Channels,"Advertising")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_agency_a_list=ifelse(str_detect(Channels,"Special Report: Agency A-List")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_leading_women=ifelse(str_detect(Channels,"Special Report: Leading Women")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_small_agency=ifelse(str_detect(Channels,"Special Report: Small Agency Conference and Awards")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(creativity_news=ifelse(str_detect(Channels,"Creativity News")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(best_places_to_work=ifelse(str_detect(Channels,"Best Places to Work")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(special_report_tv_upfront=ifelse(str_detect(Channels,"Special Report: TV Upfront")&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  mutate(other_channel=ifelse(!Channels%in%list$Channels&`Article.Length.flag..p43...prop43.`=="full",`Pages`,NA))%>%
+  group_by(Visitor_ID,`Visit.Number`,Date,`Mobile.Device.Type`,clickshare,Referrers)%>%
+  summarise(n_articles=n_distinct(article_check,na.rm=TRUE),
+            n_clickshare_account_change=n_distinct(clickshare_account_change,na.rm=TRUE),
+            n_cs_suspend=n_distinct(customer_service_suspend,na.rm=TRUE),
+            n_cs_hard_cancel=n_distinct(customer_service_hard_cancel,na.rm=TRUE),
+            n_cs_soft_cancel=n_distinct(customer_service_soft_cancel,na.rm=TRUE),
+            n_cs_sub=n_distinct(customer_service_subscription_general,na.rm=TRUE),
+            n_cs_order=n_distinct(customer_service_order,na.rm=TRUE),
+            n_cs_account=n_distinct(customer_service_account,na.rm=TRUE),
+            n_marketing_news_strategy=n_distinct(marketing_news_strategy,na.rm=TRUE),
+            n_digital_marketing_tech_news=n_distinct(digital_marketing_and_tech_news,na.rm=TRUE),
+            n_work=n_distinct(work,na.rm=TRUE),
+            n_agency_news=n_distinct(agency_news,na.rm=TRUE),
+            n_special_report_super_bowl=n_distinct(special_report_super_bowl,na.rm=TRUE),
+            n_media=n_distinct(media,na.rm=TRUE),
+            n_opinion=n_distinct(opinion,na.rm=TRUE),
+            n_special_report_creativity_top_5=n_distinct(special_report_creativity_top_5,na.rm=TRUE),
+            n_hot_spots=n_distinct(hot_spots,na.rm=TRUE),
+            n_agency_a_list=n_distinct(agency_a_list_creativity_awards,na.rm=TRUE),
+            n_data_center_channel=n_distinct(data_center_channel,na.rm=TRUE),
+            n_year_in_review=n_distinct(year_in_review,na.rm=TRUE),
+            n_cannes_lions=n_distinct(cannes_lions,na.rm=TRUE),
+            n_advertising_news=n_distinct(advertising_news,na.rm=TRUE),
+            n_podcast_marketers_brief=n_distinct(podcast_marketers_brief,na.rm=TRUE),
+            n_creativity_channel=n_distinct(creativity_channel,na.rm=TRUE),
+            n_adage_events=n_distinct(ad_age_events,na.rm=TRUE),
+            n_adage_videos=n_distinct(ad_age_videos,na.rm=TRUE),
+            n_special_report_40_under_40=n_distinct(special_report_40_under_40,na.rm=TRUE),
+            n_advertising=n_distinct(advertising,na.rm=TRUE),
+            n_special_report_agency_a_list=n_distinct(special_report_agency_a_list,na.rm=TRUE),
+            n_special_report_leading_women=n_distinct(special_report_leading_women,na.rm=TRUE),
+            n_special_report_small_agency=n_distinct(special_report_small_agency,na.rm=TRUE),
+            n_creativity_news=n_distinct(creativity_news,na.rm=TRUE),
+            n_best_places_to_work=n_distinct(best_places_to_work,na.rm=TRUE),
+            n_special_report_tv_upfront=n_distinct(special_report_tv_upfront,na.rm=TRUE),
+            n_other_channel=n_distinct(other_channel,na.rm=TRUE))
+
+
+cleaned_2022_transformed<-transformed_visits%>%
+  mutate(`Visit Number`=as.double(Visit.Number),
+         `Mobile Device Type`=Mobile.Device.Type)%>%
+  ungroup()%>%
+  select(Visitor_ID,`Visit.Number`,Date,`Mobile.Device.Type`,Referrers,clickshare,n_articles,n_clickshare_account_change,n_cs_suspend,n_cs_hard_cancel,n_cs_soft_cancel,n_cs_sub,n_cs_order,n_cs_account,n_marketing_news_strategy,n_digital_marketing_tech_news,n_work,n_agency_news,n_special_report_super_bowl,n_media,n_opinion,n_special_report_creativity_top_5,n_hot_spots,n_agency_a_list,n_data_center_channel,n_year_in_review,n_cannes_lions,n_advertising_news,n_podcast_marketers_brief,n_creativity_channel,n_adage_events,n_adage_videos,n_special_report_40_under_40,n_advertising,n_adage_events,n_adage_videos,n_special_report_40_under_40,n_advertising,n_other_channel)
+
+AA_Web_Data_Reduced<-rbind(cleaned_2022_transformed,transformed_2022)
+AA_Web_Data_Reduced<-AA_2022_2023_Data_with_data_center
+
+write.csv(AA_Web_Data_Reduced,"AA_Web_Data_With_Content.csv")
+```
+
+
+
+
+
+```{r}
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+zinfo <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'zoominfo',
+               sslmode='require')
+
+query_2<-'select userid,aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid from staging.clickshare_aa_stg'
+
+clickshare_stuff<-dbGetQuery(prod,query_2)
+
+
+clickshare_list<-clickshare_stuff%>%
+  mutate(aa_subscriberid=ifelse(aa_subscriberid=='',NA,aa_subscriberid),
+         aad_subscriberid=ifelse(aad_subscriberid=='',NA,aad_subscriberid),
+         aar_subscriberid=ifelse(aar_subscriberid=='',NA,aar_subscriberid),
+         aaz_subscriberid=ifelse(aaz_subscriberid=='',NA,aaz_subscriberid))%>%
+         
+  mutate(sub_id=coalesce(aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid))%>%
+  dplyr::select(userid,sub_id)%>%
+  filter(!is.na(sub_id))%>%
+  mutate(sub_id=as.double(sub_id))
+
+
+demo<-"select * from reporting.mv_tbl__customer_demographic_aa_mv__0"
+
+
+demographics<-dbGetQuery(zinfo,demo)
+
+dem_info<-demographics%>%
+  dplyr::select(clickshareusername,clickshareuserid,organization,businddescription,promotesubscriptions,promoteeditorial,promoteevents,promotewebinars,promotethirdparty,promoteadvertising,isactivesubscriber)
+
+dup_annual<-AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==52)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(n=n())%>%
+  filter(n==2)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  mutate(pub_code_level=ifelse(PUB_CODE=="AAD",2,
+                               ifelse(PUB_CODE=="AA",1,0)),
+         max_pub=max(pub_code_level,na.rm=TRUE),
+         )%>%
+  mutate(RATE=ifelse(max_pub>0,sum(RATE),RATE))%>%
+  mutate(max_term_number=max(TERM_NUMBER))%>%
+  mutate(max_term_pub=ifelse(max_pub==2,"AAD",
+                             ifelse(max_pub==1,"AA",PUB_CODE)))%>%
+  filter(max_term_pub==PUB_CODE)
+
+non_dup_annual<-AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==52)%>%
+  mutate(CUSTOMER_NUMBER=as.double(CUSTOMER_NUMBER))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER)%>%
+  mutate(n=n())%>%
+  filter(n==1)
+
+annual_aa_list<-rbind(non_dup_annual,dup_annual)
+
+clean_annual_list<-annual_aa_list%>%
+  select(-c(n,pub_code_level,max_pub,max_term_number,max_term_pub))
+
+clean_annual_list
+
+AA_2022_2023_Cust_Records%>%
+  filter(DONOR_TYPE=="I")%>%
+  filter(EXPIRE_DATE<as.Date("01-01-2024","%m-%d-%Y"))%>%
+  filter(TERM==4)
+
+
+AA_Web_Data_With_Content%>%
+  head(10000)%>%
+  group_by(Visitor_ID,Visit.Number)%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(month_year=format(as.Date(Date), "%Y-%m"))%>%
+  ungroup()%>%
+  group_by(month_year)%>%
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news),
+            work=sum(n_work),
+            agency_news=sum(n_agency_news),
+            special_report_super_bowl=sum(n_special_report_super_bowl),
+            media=sum(n_media),
+            opinion=sum(n_opinion),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5),
+            hot_spots=sum(n_hot_spots),
+            agency_a_list=sum(n_agency_a_list),
+            data_center=sum(n_data_center_channel),
+            year_in_review=sum(n_year_in_review),
+            cannes_lions=sum(n_cannes_lions),
+            advertising_news=sum(n_advertising_news),
+            podcast_marketers_brief=sum(n_podcast_marketers_brief),
+            creativity=sum(n_creativity_channel),
+            adage_events=sum(n_adage_events),
+            adage_videos=sum(n_adage_videos),
+            special_report_40_under_40=sum(n_special_report_40_under_40),
+            advertising=sum(n_advertising),
+            other=sum(n_other_channel))%>%
+  gather("Content","Full Article Reads",marketing_news_strategy:other)%>%
+  group_by(month_year)%>%
+  mutate(total_article_reads=sum(`Full Article Reads`))%>%
+  mutate(share_of_content=round(`Full Article Reads`/total_article_reads*100,digits=1))%>%
+  ungroup()%>%
+  mutate(total_articles_year=sum(total_article_reads))%>%
+  group_by(Content)%>%
+  summarise(total_articles=sum(`Full Article Reads`),
+            total_articles_year=max(total_articles_year))%>%
+  mutate(share_of_total_articles=total_articles/total_articles_year)%>%
+  arrange(desc(share_of_total_articles))
+  
+  ggplot(aes(month_year,share_of_content,fill=Content))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()
+
+  
+  
+```
+
+
+```{r}
+AA_Web_Data_With_Content%>%
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news),
+            work=sum(n_work),
+            agency_news=sum(n_agency_news),
+            special_report_super_bowl=sum(n_special_report_super_bowl),
+            media=sum(n_media),
+            opinion=sum(n_opinion),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5),
+            hot_spots=sum(n_hot_spots),
+            agency_a_list=sum(n_agency_a_list),
+            data_center=sum(n_data_center_channel),
+            year_in_review=sum(n_year_in_review),
+            cannes_lions=sum(n_cannes_lions),
+            advertising_news=sum(n_advertising_news),
+            podcast_marketers_brief=sum(n_podcast_marketers_brief),
+            creativity=sum(n_creativity_channel),
+            adage_events=sum(n_adage_events),
+            adage_videos=sum(n_adage_videos),
+            special_report_40_under_40=sum(n_special_report_40_under_40),
+            advertising=sum(n_advertising),
+            other=sum(n_other_channel))%>%
+  gather("Content","Full Article Reads",marketing_news_strategy:other)%>%
+  mutate(total_article_reads=sum(`Full Article Reads`))%>%
+  mutate(share_of_content=round(`Full Article Reads`/total_article_reads*100,digits=1))%>%
+  ggplot(aes(reorder(Content,share_of_content),share_of_content,label=share_of_content))+geom_bar(stat="identity",position="dodge")+coord_flip()+geom_label()
+```
+```{r}
+
+AA_Web_Data_With_Content%>%
+  head(10000)%>%
+  group_by(Visitor_ID,Visit.Number)%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(month_year=format(as.Date(Date), "%Y-%m"))%>%
+  ungroup()%>%
+  group_by(month_year)%>%
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news),
+            work=sum(n_work),
+            agency_news=sum(n_agency_news),
+            special_report_super_bowl=sum(n_special_report_super_bowl),
+            media=sum(n_media),
+            opinion=sum(n_opinion),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5),
+            year_in_review=sum(n_year_in_review),
+            cannes_lions=sum(n_cannes_lions),
+            creativity=sum(n_creativity_channel),
+            other=sum(n_other_channel))%>%
+  gather("Content","Full Article Reads",marketing_news_strategy:other)%>%
+  group_by(month_year)%>%
+  mutate(total_article_reads=sum(`Full Article Reads`))%>%
+  mutate(share_of_content=round(`Full Article Reads`/total_article_reads*100,digits=1))%>%
+  ungroup()%>%
+  ggplot(aes(month_year,share_of_content,fill=Content))+geom_bar(stat="identity",position="stack")+theme_minimal()+coord_flip()
+```
+
+```{r}
+cluster_set<-clean_annual_list%>%
+  ungroup()%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))%>%
+  left_join(dem_info,by=c("EMAIL_ADDRESS"="clickshareusername"))%>%
+  separate(businddescription,into=c('business','business_detail'),sep="-")%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  left_join(AA_Web_Data_With_Content,by=c("userid"="clickshare"))%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(datediff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(vis_id_number=paste(Visitor_ID,`Visit.Number`,sep="_"))%>%
+  mutate(vis_id_number=ifelse(Date>reference_date|Date<START_DATE,NA,vis_id_number),
+         Date=if_else(Date>reference_date|Date<START_DATE,NA,Date),
+         `Mobile.Device.Type`=ifelse(Date>reference_date|Date<START_DATE,NA,`Mobile.Device.Type`),
+         Referrers=ifelse(Date>reference_date|Date<START_DATE,NA,Referrers),
+         n_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_articles),
+         n_clickshare_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_account_change),
+         n_cs_suspend=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_suspend),
+         n_cs_hard_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_hard_cancel),
+         n_cs_soft_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_soft_cancel),
+         n_cs_sub=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_sub),
+         n_cs_order=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_order),
+         n_cs_account=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_account),
+         is_article_visit=ifelse(n_articles==0|is.na(n_articles),NA,1),
+         n_marketing_news_strategy=ifelse(Date>reference_date|Date<START_DATE,NA,n_marketing_news_strategy),
+         n_digital_marketing_tech_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_digital_marketing_tech_news),
+         n_work=ifelse(Date>reference_date|Date<START_DATE,NA,n_work),
+         n_agency_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_agency_news),   
+         n_special_report_super_bowl=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_super_bowl),   
+         n_media=ifelse(Date>reference_date|Date<START_DATE,NA,n_media),
+         n_opinion=ifelse(Date>reference_date|Date<START_DATE,NA,n_opinion),
+         n_special_report_creativity_top_5=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_creativity_top_5),
+         n_hot_spots=ifelse(Date>reference_date|Date<START_DATE,NA,n_hot_spots),
+         n_agency_a_list=ifelse(Date>reference_date|Date<START_DATE,NA,n_agency_a_list),
+         n_data_center_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_data_center_channel),
+         n_year_in_review=ifelse(Date>reference_date|Date<START_DATE,NA,n_year_in_review),
+         n_cannes_lions=ifelse(Date>reference_date|Date<START_DATE,NA,n_cannes_lions),
+         n_advertising_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_advertising_news),
+         n_podcast_marketers_brief=ifelse(Date>reference_date|Date<START_DATE,NA,n_podcast_marketers_brief),
+         n_creativity_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_creativity_channel),
+         n_adage_events=ifelse(Date>reference_date|Date<START_DATE,NA,n_adage_events),
+         n_adage_videos=ifelse(Date>reference_date|Date<START_DATE,NA,n_adage_videos),
+         n_special_report_40_under_40=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_40_under_40),
+         n_advertising=ifelse(Date>reference_date|Date<START_DATE,NA,n_advertising),
+         n_other_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_other_channel),
+         referrer_visits=ifelse(is.na(Referrers),NA,1)
+         )%>%
+  mutate(cust_serv_cancel_page=n_cs_hard_cancel+n_cs_soft_cancel+n_cs_suspend,
+         cust_serv_other=n_cs_order+n_cs_account+n_cs_sub)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,START_DATE,RENEWAL_ORDER_DATE,reference_date,EXPIRE_DATE,business)%>%
+  arrange(Date,.by_group=TRUE)%>%
+  mutate(leading_date=lead(Date))%>%
+  mutate(diff_from_next_date=as.numeric(difftime(leading_date,Date,units="days")))%>%
+  mutate(sd_days_between=sd(diff_from_next_date,na.rm=TRUE))%>%
+  mutate(variance=ifelse(n_distinct(vis_id_number,na.rm=TRUE)==0,"No Visits",
+                         ifelse(n_distinct(vis_id_number,na.rm=TRUE)<=2,"Less than 2 Visits",
+                                ifelse(sd_days_between<=7,"Weekly",
+                                       ifelse(sd_days_between<=14,"Bi-Weekly","Bi-Weekly+")))))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,START_DATE,RENEWAL_ORDER_DATE,reference_date,EXPIRE_DATE,business,variance)%>%
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy,na.rm=TRUE),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news,na.rm=TRUE),
+            work=sum(n_work,na.rm=TRUE),
+            agency_news=sum(n_agency_news,na.rm=TRUE),
+            special_report_super_bowl=sum(n_special_report_super_bowl,na.rm=TRUE),
+            media=sum(n_media,na.rm=TRUE),
+            opinion=sum(n_opinion,na.rm=TRUE),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5,na.rm=TRUE),
+            hot_spots=sum(n_hot_spots,na.rm=TRUE),
+            agency_a_list=sum(n_agency_a_list,na.rm=TRUE),
+            data_center=sum(n_data_center_channel,na.rm=TRUE),
+            year_in_review=sum(n_year_in_review,na.rm=TRUE),
+            cannes_lions=sum(n_cannes_lions,na.rm=TRUE),
+            advertising_news=sum(n_advertising_news,na.rm=TRUE),
+            podcast_marketers_brief=sum(n_podcast_marketers_brief,na.rm=TRUE),
+            creativity=sum(n_creativity_channel,na.rm=TRUE),
+            adage_events=sum(n_adage_events,na.rm=TRUE),
+            adage_videos=sum(n_adage_videos,na.rm=TRUE),
+            special_report_40_under_40=sum(n_special_report_40_under_40,na.rm=TRUE),
+            advertising=sum(n_advertising,na.rm=TRUE),
+            other=sum(n_other_channel,na.rm=TRUE),
+            n_article_visits=sum(is_article_visit,na.rm=TRUE),
+            n_referred_visits=sum(referrer_visits,na.rm=TRUE),
+            clickshare_account_change=sum(n_clickshare_account_change,na.rm=TRUE),
+            cust_service_cancel_page=sum(cust_serv_cancel_page,na.rm=TRUE),
+            cust_serv_other=sum(cust_serv_other,na.rm=TRUE),
+            clickshare_account_change=sum(n_clickshare_account_change,na.rm=TRUE),
+            n_distinct_visits=n_distinct(vis_id_number,na.rm=TRUE)
+            )%>%
+  ungroup()%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE),
+         IS_AUTO_RENEW=ifelse(IS_AUTO_RENEW=="Y",1,0),
+         is_former=ifelse(as.numeric(difftime(reference_date,EXPIRE_DATE,units="days"))>30,1,0),
+         did_churn=ifelse(is_former!=1&!is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  select(-c(is_former,START_DATE,RENEWAL_ORDER_DATE,reference_date,EXPIRE_DATE))
+
+```
+```{r}
+business_list<-cluster_set%>%
+  group_by(business)%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  summarise(n=n_distinct(paste(ORDER_NUMBER,CUSTOMER_NUMBER)))%>%
+  arrange(desc(n))%>%
+  mutate(total=sum(n))%>%
+  mutate(cumsumn=cumsum(n))%>%
+  mutate(share=cumsumn/total)%>%
+  mutate(business=ifelse(share>0.954,"Other Business (Minority Population)",business))%>%
+  select(business)%>%
+  unique()
+
+business_list
+```
+
+```{r}
+cluster_set%>%
+  filter(is.na(variance))
+```
+
+```{r}
+minMax <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(str_detect(business,"Advertising Agency|Other|Advertising/Marketing|Media|Other Agencies|Universities/Colleges|Entertainment|Consumer Packaged Goods|Financial/Insurance|unknown/NA"),business,"Other Business"))%>%
+  group_by(business)%>%
+  summarise(n=n_distinct(paste(CUSTOMER_NUMBER,ORDER_NUMBER)))%>%
+  arrange(desc(n))
+
+norm_cluster_set<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,variance,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,variance)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  filter(n_article_visits>0)%>%
+  mutate(total_articles=sum(Count))%>%
+  mutate(share_of_total_articles=Count/total_articles)%>%
+  select(-c(Count,total_articles))%>%
+  spread(Content,share_of_total_articles)%>%
+  ungroup()%>%
+  select(-c(CUSTOMER_NUMBER,ORDER_NUMBER))%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn),
+         variance=as.factor(variance))%>%
+  mutate(RATE=minMax(RATE),
+         TERM_NUMBER=minMax(TERM_NUMBER),
+         n_article_visits=minMax(n_article_visits),
+         n_referred_visits=minMax(n_referred_visits),
+         clickshare_account_change=minMax(clickshare_account_change),
+         cust_service_cancel_page=minMax(cust_service_cancel_page),
+         cust_serv_other=minMax(cust_serv_other))
+  
+info_cluster_set<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,variance,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,variance)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  filter(n_article_visits>0)%>%
+  mutate(total_articles=sum(Count))%>%
+  mutate(share_of_total_articles=Count/total_articles)%>%
+  select(-c(Count,total_articles))%>%
+  spread(Content,share_of_total_articles)%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn),
+         variance=as.factor(variance))%>%
+  ungroup()
+  
+
+norm_cluster_set<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,variance,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other,n_distinct_visits)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,variance,n_distinct_visits)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  filter(n_distinct_visits>0)%>%
+  mutate(total_articles=sum(Count))%>%
+  spread(Content,Count)%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn),
+         variance=as.factor(variance))%>%
+  ungroup()%>%
+  select(-c(CUSTOMER_NUMBER,ORDER_NUMBER))%>%
+  mutate(across(where(is.numeric),minMax))
+
+info_cluster_set<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,variance,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other,n_distinct_visits)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,variance,n_distinct_visits)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  filter(n_distinct_visits>0)%>%
+  mutate(total_articles=sum(Count))%>%
+  spread(Content,Count)%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn),
+         variance=as.factor(variance))%>%
+  ungroup()
+
+
+D<-daisy(norm_cluster_set,metric="gower")  
+
+sil_width<-c(NA)
+
+for (i in 2:10) {
+    pam_fit<-pam(D,diss = TRUE, k = i) 
+    sil_width[i]<-pam_fit$silinfo$avg.width
+}
+
+plot(1:10,sil_width)
+
+```
+```{r}
+pam_fit<-pam(D,diss = TRUE, k = 4)
+
+
+info_cluster_set$cluster<-pam_fit$clustering
+
+info_cluster_set
+
+pam_results <- info_cluster_set %>%
+    group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+pam_results$the_summary
+norm_cluster_set
+```
+
+
+
+```{r}
+info_cluster_set%>%
+  mutate(cluster=as.factor(cluster))%>%
+  group_by(cluster)%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(cluster,Content)%>%
+  summarise(mean_articles_read=mean(`Share of Consumed Articles`))%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  slice_max(mean_articles_read,n=4)%>%
+  ggplot(aes(cluster,mean_articles_read,fill=Content))+geom_bar(stat="identity",position="dodge")
+```
+
+```{r}
+info_cluster_set%>%
+  mutate(cluster=as.factor(cluster))%>%
+  group_by(cluster,did_churn)%>%
+  summarise(n_users=n_distinct(paste(CUSTOMER_NUMBER,ORDER_NUMBER)))%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  mutate(total_active_users=sum(n_users))%>%
+  mutate(churn_rate=round(n_users/total_active_users*100,1))%>%
+  filter(did_churn==1)
+  
+```
+
+```{r}
+info_cluster_set%>%
+  group_by(did_churn,business)%>%
+  summarise(n=n())%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  mutate(total=sum(n))%>%
+  mutate(share=n/total*100)%>%
+  filter(business=="Universities/Colleges/Schools")
+```
+
+
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,Content)%>%
+  summarise(Content_share=mean(`Share of Consumed Articles`))%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  slice_max(Content_share,n=10)%>%
+  ggplot(aes(did_churn,round(Content_share*100,1),fill=Content))+geom_bar(stat="identity",position="dodge")+theme_minimal()+geom_text(aes(label=round(Content_share*100,1)),vjust=-0.1,position=position_dodge(width=0.9))+coord_flip()
+```
+```{r}
+info_cluster_set%>%
+  mutate(is_university=ifelse(business=="Universities/Colleges/Schools",TRUE,FALSE))%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,is_university,Content)%>%
+  summarise(n=n(),
+            Content_share=mean(`Share of Consumed Articles`))%>%
+  group_by(did_churn,is_university)%>%
+  slice_max(Content_share,n=10)%>%
+  filter(is_university==TRUE)%>%
+  ggplot(aes(is_university,round(Content_share*100,1),fill=Content,label=round(Content_share*100,1)))+geom_bar(stat="identity",position="dodge")+facet_wrap(~did_churn)+geom_text(aes(label=round(Content_share*100,1)),vjust=-0.1,position=position_dodge(width=0.9))+coord_flip()
+```
+
+```{r}
+most_popular_content<-clean_annual_list%>%
+  ungroup()%>%
+  mutate(reference_date=if_else(RENEWAL_ORDER_DATE<EXPIRE_DATE&!is.na(RENEWAL_ORDER_DATE),RENEWAL_ORDER_DATE,EXPIRE_DATE))%>%
+  left_join(dem_info,by=c("EMAIL_ADDRESS"="clickshareusername"))%>%
+  separate(businddescription,into=c('business','business_detail'),sep="-")%>%
+  left_join(clickshare_list,by=c("CUSTOMER_NUMBER"="sub_id"))%>%
+  left_join(AA_Web_Data_With_Content,by=c("userid"="clickshare"))%>%
+  mutate(Date=as.Date(Date,"%B %d,%Y"))%>%
+  mutate(datediff=as.numeric(difftime(reference_date,Date,units="days")))%>%
+  mutate(vis_id_number=paste(Visitor_ID,`Visit.Number`,sep="_"))%>%
+  mutate(vis_id_number=ifelse(Date>reference_date|Date<START_DATE,NA,vis_id_number),
+         Date=if_else(Date>reference_date|Date<START_DATE,NA,Date),
+         `Mobile.Device.Type`=ifelse(Date>reference_date|Date<START_DATE,NA,`Mobile.Device.Type`),
+         Referrers=ifelse(Date>reference_date|Date<START_DATE,NA,Referrers),
+         n_articles=ifelse(Date>reference_date|Date<START_DATE,NA,n_articles),
+         n_clickshare_account_change=ifelse(Date>reference_date|Date<START_DATE,NA,n_clickshare_account_change),
+         n_cs_suspend=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_suspend),
+         n_cs_hard_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_hard_cancel),
+         n_cs_soft_cancel=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_soft_cancel),
+         n_cs_sub=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_sub),
+         n_cs_order=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_order),
+         n_cs_account=ifelse(Date>reference_date|Date<START_DATE,NA,n_cs_account),
+         is_article_visit=ifelse(n_articles==0|is.na(n_articles),NA,1),
+         n_marketing_news_strategy=ifelse(Date>reference_date|Date<START_DATE,NA,n_marketing_news_strategy),
+         n_digital_marketing_tech_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_digital_marketing_tech_news),
+         n_work=ifelse(Date>reference_date|Date<START_DATE,NA,n_work),
+         n_agency_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_agency_news),   
+         n_special_report_super_bowl=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_super_bowl),   
+         n_media=ifelse(Date>reference_date|Date<START_DATE,NA,n_media),
+         n_opinion=ifelse(Date>reference_date|Date<START_DATE,NA,n_opinion),
+         n_special_report_creativity_top_5=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_creativity_top_5),
+         n_hot_spots=ifelse(Date>reference_date|Date<START_DATE,NA,n_hot_spots),
+         n_agency_a_list=ifelse(Date>reference_date|Date<START_DATE,NA,n_agency_a_list),
+         n_data_center_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_data_center_channel),
+         n_year_in_review=ifelse(Date>reference_date|Date<START_DATE,NA,n_year_in_review),
+         n_cannes_lions=ifelse(Date>reference_date|Date<START_DATE,NA,n_cannes_lions),
+         n_advertising_news=ifelse(Date>reference_date|Date<START_DATE,NA,n_advertising_news),
+         n_podcast_marketers_brief=ifelse(Date>reference_date|Date<START_DATE,NA,n_podcast_marketers_brief),
+         n_creativity_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_creativity_channel),
+         n_adage_events=ifelse(Date>reference_date|Date<START_DATE,NA,n_adage_events),
+         n_adage_videos=ifelse(Date>reference_date|Date<START_DATE,NA,n_adage_videos),
+         n_special_report_40_under_40=ifelse(Date>reference_date|Date<START_DATE,NA,n_special_report_40_under_40),
+         n_advertising=ifelse(Date>reference_date|Date<START_DATE,NA,n_advertising),
+         n_other_channel=ifelse(Date>reference_date|Date<START_DATE,NA,n_other_channel),
+         referrer_visits=ifelse(is.na(Referrers),NA,1)
+         )%>%
+  mutate(cust_serv_cancel_page=n_cs_hard_cancel+n_cs_soft_cancel+n_cs_suspend,
+         cust_serv_other=n_cs_order+n_cs_account+n_cs_sub,
+         is_former=ifelse(as.numeric(difftime(reference_date,EXPIRE_DATE,units="days"))>30,1,0),
+         did_churn=ifelse(is_former!=1&!is.na(RENEWAL_ORDER_DATE),0,1))%>%
+  mutate(m_y=format(Date,"%Y-%m"))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,IS_AUTO_RENEW,did_churn,m_y)%>%
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy,na.rm=TRUE),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news,na.rm=TRUE),
+            work=sum(n_work,na.rm=TRUE),
+            agency_news=sum(n_agency_news,na.rm=TRUE),
+            special_report_super_bowl=sum(n_special_report_super_bowl,na.rm=TRUE),
+            media=sum(n_media,na.rm=TRUE),
+            opinion=sum(n_opinion,na.rm=TRUE),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5,na.rm=TRUE),
+            hot_spots=sum(n_hot_spots,na.rm=TRUE),
+            agency_a_list=sum(n_agency_a_list,na.rm=TRUE),
+            data_center=sum(n_data_center_channel,na.rm=TRUE),
+            year_in_review=sum(n_year_in_review,na.rm=TRUE),
+            cannes_lions=sum(n_cannes_lions,na.rm=TRUE),
+            advertising_news=sum(n_advertising_news,na.rm=TRUE),
+            podcast_marketers_brief=sum(n_podcast_marketers_brief,na.rm=TRUE),
+            creativity=sum(n_creativity_channel,na.rm=TRUE),
+            adage_events=sum(n_adage_events,na.rm=TRUE),
+            adage_videos=sum(n_adage_videos,na.rm=TRUE),
+            special_report_40_under_40=sum(n_special_report_40_under_40,na.rm=TRUE),
+            advertising=sum(n_advertising,na.rm=TRUE),
+            other=sum(n_other_channel,na.rm=TRUE),
+            )
+  
+  
+most_popular_content%>%
+  filter(Date<as.Date("2023-01-01","%Y-%m-%d")|is.na(Date))%>%
+  mutate(m_y=format(Date,"%Y-%m"))%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,IS_AUTO_RENEW,did_churn,m_y)
+  summarise(marketing_news_strategy=sum(n_marketing_news_strategy,na.rm=TRUE),
+            digital_marketing_tech_news=sum(n_digital_marketing_tech_news,na.rm=TRUE),
+            work=sum(n_work,na.rm=TRUE),
+            agency_news=sum(n_agency_news,na.rm=TRUE),
+            special_report_super_bowl=sum(n_special_report_super_bowl,na.rm=TRUE),
+            media=sum(n_media,na.rm=TRUE),
+            opinion=sum(n_opinion,na.rm=TRUE),
+            special_report_creativity_top_5=sum(n_special_report_creativity_top_5,na.rm=TRUE),
+            hot_spots=sum(n_hot_spots,na.rm=TRUE),
+            agency_a_list=sum(n_agency_a_list,na.rm=TRUE),
+            data_center=sum(n_data_center_channel,na.rm=TRUE),
+            year_in_review=sum(n_year_in_review,na.rm=TRUE),
+            cannes_lions=sum(n_cannes_lions,na.rm=TRUE),
+            advertising_news=sum(n_advertising_news,na.rm=TRUE),
+            podcast_marketers_brief=sum(n_podcast_marketers_brief,na.rm=TRUE),
+            creativity=sum(n_creativity_channel,na.rm=TRUE),
+            adage_events=sum(n_adage_events,na.rm=TRUE),
+            adage_videos=sum(n_adage_videos,na.rm=TRUE),
+            special_report_40_under_40=sum(n_special_report_40_under_40,na.rm=TRUE),
+            advertising=sum(n_advertising,na.rm=TRUE),
+            other=sum(n_other_channel,na.rm=TRUE),
+            )%>%
+  gather("Content","Full Article Reads",marketing_news_strategy:other)%>%
+  group_by(did_churn,m_y,Content)%>%
+  summarise(distinct_reads=sum(`Full Article Reads`,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(m_y)%>%
+  mutate(total_reads=sum(distinct_reads))%>%
+  mutate(share_of_content=distinct_reads/total_reads)%>%
+  group_by(did_churn,m_y)%>%
+  slice_max(share_of_content,n=3)%>%
+  ggplot(aes(m_y,round(share_of_content*100,1),fill=Content,label=Content))+geom_bar(stat="identity",position="dodge")+coord_flip()+geom_text(vjust=-0.1,position=position_dodge(width=0.9))
+```
+
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,Content)%>%
+  summarise(n=n(),
+            Content_share=mean(`Share of Consumed Articles`))%>%
+  group_by(did_churn)%>%
+  slice_max(Content_share,n=10)%>%
+  filter(did_churn==1)%>%
+  ggplot(aes(reorder(Content,round(Content_share*100,1)),round(Content_share*100,1),fill=Content,label=round(Content_share*100,1)))+geom_bar(stat="identity",position="dodge")+facet_wrap(~did_churn)+geom_text(aes(label=round(Content_share*100,1)),vjust=-0.1,position=position_dodge(width=0.9))+coord_flip()
+```
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,Content)%>%
+  summarise(n=n(),
+            Content_share=mean(`Share of Consumed Articles`))%>%
+  group_by(did_churn)%>%
+  slice_max(Content_share,n=10)%>%
+  filter(did_churn==0)%>%
+  ggplot(aes(reorder(Content,round(Content_share*100,1)),round(Content_share*100,1),fill=Content,label=round(Content_share*100,1)))+geom_bar(stat="identity",position="dodge")+facet_wrap(~did_churn)+geom_text(aes(label=round(Content_share*100,1)),vjust=-0.1,position=position_dodge(width=0.9))+coord_flip()
+```
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,did_churn)%>%
+  mutate(top_content_value=ifelse(`Share of Consumed Articles`==0,NA,Content))%>%
+  summarise(distinct_content_types=n_distinct(top_content_value))%>%
+  ungroup()%>%
+  group_by(did_churn)%>%
+  summarise(avg_distinct_content=mean(distinct_content_types))
+```
+
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,Content,business)%>%
+  summarise(mean_share=mean(`Share of Consumed Articles`))%>%
+  ungroup()%>%
+  group_by(business,did_churn)%>%
+  slice_max(mean_share,n=5)
+  summarise(avg_distinct_content=mean(distinct_content_types))
+```
+
+
+```{r}
+info_cluster_set%>%
+  gather("Content","Share of Consumed Articles",adage_events:year_in_review)%>%
+  group_by(did_churn,Content,TERM_NUMBER)%>%
+  summarise(mean_share=mean(`Share of Consumed Articles`))%>%
+  ungroup()%>%
+  group_by(TERM_NUMBER,did_churn)%>%
+  slice_max(mean_share,n=5)
+  summarise(avg_distinct_content=mean(distinct_content_types))
+```
+
+```{r}
+info_cluster_set%>%
+  group_by(cluster,did_churn)%>%
+  summarise(n=n_distinct(paste(ORDER_NUMBER,CUSTOMER_NUMBER)))%>%
+  group_by(cluster)%>%
+  mutate(total=sum(n))%>%
+  mutate(churn_percent=n/total*100)%>%
+  filter(did_churn==1)
+```
+
+```{r}
+info_cluster_set%>%
+  group_by(cluster)%>%
+  ggplot(aes(TERM_NUMBER))+geom_histogram()+facet_wrap(~cluster)
+```
+```{r}
+info_cluster_set%>%
+  group_by(cluster,business)%>%
+  summarise(n=n_distinct(paste(ORDER_NUMBER,CUSTOMER_NUMBER)))%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  mutate(total_cust=sum(n))%>%
+  mutate(share=n/total_cust*100)%>%
+  mutate(ypos=cumsum(share)-0.3*share)%>%
+  ggplot(aes(x="", y=share, fill=business)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  theme_void()+facet_wrap(~cluster)+
+  geom_text(aes(label = round(share,0)),
+            position = position_stack(vjust = 0.5),size=2,color="white")
+```
+```{r}
+info_cluster_set%>%
+  group_by(cluster,PUB_CODE)%>%
+  summarise(n=n_distinct(paste(ORDER_NUMBER,CUSTOMER_NUMBER)))%>%
+  ungroup()%>%
+  group_by(cluster)%>%
+  mutate(total_cust=sum(n))%>%
+  mutate(share=n/total_cust*100)%>%
+  mutate(ypos=cumsum(share)-0.3*share)%>%
+  ggplot(aes(x="", y=share, fill=PUB_CODE)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  theme_void()+facet_wrap(~cluster)+
+  geom_text(aes(label = round(share,0)),
+            position = position_stack(vjust = 0.5),size=2,color="white")
+```
+
+```{r}
+info_cluster_set%>%
+  mutate(cluster=as.factor(cluster))%>%
+  group_by(cluster,PUB_CODE)%>%
+  summarise(avg_article_visits=mean(n_article_visits))%>%
+  ggplot(aes(cluster,avg_article_visits,fill=PUB_CODE))+geom_bar(stat="identity",position="dodge")
+```
+
+```{r}
+top_20_categories_pca<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","unknown/NA",business))%>%
+  mutate(business=ifelse(str_detect(business,"Advertising Agency|Other|Advertising/Marketing|Media|Other Agencies|Universities/Colleges|Entertainment|Consumer Packaged Goods|Financial/Insurance|unknown/NA"),business,"Other Business"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,business,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other)%>%
+  mutate(PUB_CODE=as.factor(PUB_CODE),
+         IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         business=as.factor(business),
+         did_churn=as.factor(did_churn))%>%
+  select(-c(CUSTOMER_NUMBER,ORDER_NUMBER))%>%
+  mutate(across(where(is.numeric),minMax))
+
+corr_matrix<-cor(top_20_categories_pca)
+
+content_mfa<-MFA(top_20_categories_pca,
+                 group=unique_counts,
+                 type=c("n","c","n","c","n","c","c","c","c","c","n","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c","c"),
+                 name.group=colnames(top_20_categories_pca),
+                 num.group.sup=c(1,32),
+                 graph=FALSE)
+```
+
+```{r}
+fviz_pca_var(data.pca, col.var = "cos2",
+            gradient.cols = c("black", "orange", "green"),
+            repel = TRUE)
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+AA_Web_Data_With_Content%>%
+  head(1000000)%>%
+  gather("Content","Value",n_marketing_news_strategy:n_other_channel)%>%
+  group_by(paste(Visitor_ID,Visit.Number))%>%
+  mutate(content_check=ifelse(Value>0,Content,NA))%>%
+  summarise(n_distinct_content_per_visit=n_distinct(content_check,na.rm=TRUE))%>%
+  ungroup()%>%
+  summarise(mean_content_per_visit=mean(n_distinct_content_per_visit))
+```
+
+```{r}
+norm_cluster_no_shares<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  mutate(total_articles=sum(Count))%>%
+  filter(total_articles>0)%>%
+  select(-c(total_articles))%>%
+  spread(Content,Count)%>%
+  ungroup()%>%
+  select(-c(CUSTOMER_NUMBER,ORDER_NUMBER))%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn))%>%
+  mutate(across(where(is.numeric),~minMax(.x)))
+
+  
+info_cluster_set_no_share<-cluster_set%>%
+  mutate(business=ifelse(is.na(business)|business=="unknown","Missing Value",business))%>%
+  mutate(business=ifelse(business%in%business_list$business,business,"Other Business (Minority Population)"))%>%
+  mutate(business=as.factor(business))%>%
+  select(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,business,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,marketing_news_strategy,digital_marketing_tech_news,work,agency_news,special_report_super_bowl,media,opinion,special_report_creativity_top_5,hot_spots,agency_a_list,data_center,year_in_review,cannes_lions,advertising_news,podcast_marketers_brief,creativity,adage_events,adage_videos,special_report_40_under_40,advertising,other)%>%
+  gather("Content","Count",marketing_news_strategy:other)%>%
+  group_by(CUSTOMER_NUMBER,ORDER_NUMBER,PUB_CODE,RATE,IS_AUTO_RENEW,TERM_NUMBER,n_article_visits,n_referred_visits,clickshare_account_change,cust_service_cancel_page,cust_serv_other,did_churn,business)%>%
+  arrange(TERM_NUMBER,.by_group=TRUE)%>%
+  mutate(total_articles=sum(Count))%>%
+  filter(total_articles>0)%>%
+  select(-c(total_articles))%>%
+  spread(Content,Count)%>%
+  mutate(IS_AUTO_RENEW=as.factor(IS_AUTO_RENEW),
+         did_churn=as.factor(did_churn))%>%
+  ungroup()
+
+D2<-daisy(norm_cluster_no_shares,metric="gower")  
+
+sil_width<-c(NA)
+
+for (i in 2:10) {
+    pam_fit<-pam(D2,diss = TRUE, k = i) 
+    sil_width[i]<-pam_fit$silinfo$avg.width
+}
+
+plot(1:10,sil_width)
+```
+
+```{r}
+pam_fit2<-pam(D2,diss = TRUE, k = 3)
+
+
+info_cluster_set_no_share$cluster<-pam_fit2$clustering
+
+info_cluster_set
+
+pam_results <- info_cluster_set_no_share %>%
+    group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+pam_results$the_summary
+```
+
+```{r}
+info_cluster_set%>%group_by(IS_AUTO_RENEW)%>%
+  gather("Content","Share",adage_events:year_in_review)%>%
+  group_by(IS_AUTO_RENEW,Content)%>%
+  summarise(mean_share=mean(Share))%>%
+  arrange(desc(mean_share))%>%
+  group_by(IS_AUTO_RENEW)%>%
+  slice_max(mean_share,n=5)
+```
+
+
+
+
