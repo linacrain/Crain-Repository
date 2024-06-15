@@ -1,0 +1,86 @@
+---
+title: "MH_Price_Increase"
+author: "Andrew Lin"
+date: "2024-06-15"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library("readr") 
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+mh_adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='MH'")
+```
+
+
+```{r}
+mh_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(expirationissuedate>=as.Date("05/15/2023",format="%m/%d/%Y"))%>%
+  filter(startissuedate<=as.Date("05/15/2023",format="%m/%d/%Y"))%>%
+  distinct()%>%
+  summarise(active_users_at_price_increase=n_distinct(paste(shiptocustomernumber,billtocustomernumber)),
+            renewals_after_price_increase=n_distinct(ifelse(!is.na(renewaltermnumber),paste(shiptocustomernumber,billtocustomernumber),NA),na.rm=TRUE),
+            )
+```
+```{r}
+mh_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(expirationissuedate>=as.Date("05/15/2023",format="%m/%d/%Y"))%>%
+  filter(startissuedate<=as.Date("05/15/2023",format="%m/%d/%Y"))%>%
+  filter(expirationissuedate<=today())%>%
+  distinct()%>%
+  filter(og_termlength==4|og_termlength==52)%>%
+  group_by(publicationcode,og_termlength)%>%
+  summarise(active_users_at_price_increase=n_distinct(paste(shiptocustomernumber,billtocustomernumber)),
+            renewals_after_price_increase=n_distinct(ifelse(!is.na(renewaltermnumber),paste(shiptocustomernumber,billtocustomernumber),NA),na.rm=TRUE),
+            avg_rate_before_price_increase=mean(rate),
+            avg_rate_after_price_increase=mean(ifelse(!is.na(renewalrate),renewalrate,NA),na.rm=TRUE),
+            avg_term_for_renewals=mean(ifelse(!is.na(renewalrate),termnumber,NA),na.rm=TRUE),
+            avg_term_for_cancels=mean(ifelse(is.na(renewalrate),termnumber,NA),na.rm=TRUE),
+            total_renewal_revenue=sum(ifelse(!is.na(renewalrate),renewalrate,NA),na.rm=TRUE),
+            total_cancel_loss=-1*(sum(ifelse(is.na(renewalrate),rate,NA),na.rm=TRUE))
+            )
+```
+
+```{r}
+mh_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(startissuedate>=as.Date("05/15/2023",format="%m/%d/%Y"))%>%
+  filter(termnumber==1)%>%
+  filter(expirationissuedate<=today())%>%
+  distinct()%>%
+  filter(og_termlength==4|og_termlength==52)%>%
+  group_by(publicationcode,og_termlength)%>%
+  summarise(new_users_after_price_increase=n_distinct(paste(shiptocustomernumber,billtocustomernumber)),
+            renewals_after_first_term=n_distinct(ifelse(!is.na(renewaltermnumber),paste(shiptocustomernumber,billtocustomernumber),NA),na.rm=TRUE),
+            avg_rate=mean(rate),
+            median_rate=median(rate),
+            total_new_revenue=sum(rate),
+            canceled_loss=-1*sum(ifelse(!is.na(renewalrate),rate,NA),na.rm=TRUE),
+            initial_first_term_revenue=total_new_revenue+canceled_loss,
+            avg_renewed_rate=mean(ifelse(is.na(renewalrate),NA,rate),na.rm=TRUE),
+            avg_canceled_rate=mean(ifelse(is.na(renewalrate),rate,NA),na.rm=TRUE)
+            )
+```
+```{r}
+
+```
+
+
+
+
+
+
+
+

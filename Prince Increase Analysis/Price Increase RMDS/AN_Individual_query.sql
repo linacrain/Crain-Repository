@@ -1,4 +1,4 @@
-create table dev.pelcro_records.an_ind as (/*Base Advantage Query for AN*/
+/*Base Advantage Query for AN*/
 with advantage_list_uncleaned as (
 select
     Expire.ShipToCustomerNumber,
@@ -11,7 +11,7 @@ select
     end as OwningOffice,
     case when Expire.PublicationCode like '%AN1%' then 'Premium'
      when Expire.PublicationCode ='AN2' then 'Basic Digital'
-     when Expire.PublicationCode like '%AN3%' then 'AN3'
+     when Expire.PublicationCode like '%AN3%' then 'Digital All Access'
      when Expire.PublicationCode like '%AN4%' then 'All Access'
     end as publicationcode,
     expire.publicationcode AS pubcheck,
@@ -255,7 +255,7 @@ select
 	owningoffice,
 	ordernumber,
 	case when max(pub_level)=4 then 'All Access'
-		 when max(pub_level)=3 then 'AN3'
+		 when max(pub_level)=3 then 'Digital All Access'
 	   	 when max(pub_level)=2 then 'Premium'
 	   	 when max(pub_level)=1 then 'Basic Digital'
 	   	 when max(pub_level)=0 then 'Premium Canada'
@@ -405,15 +405,14 @@ join (SELECT
 		ci.*
 	  FROM an_i ci
 	  join rolled_up_an ruc on ruc.subscriptionid=ci.subscriptionid and ruc.totalprice=ci.totalprice) c on c.subscriptionid=a.pelcro_subid
-where (c.start_date=expirationissuedate or c.start_date>startissuedate) or (c.start_date>=startissuedate and c.start_date<=expirationissuedate) or (expirationissuedate=expire_date) or c.chargereferences like '%null%' or c.chargereferences is not null)
+where (c.start_date=expirationissuedate or c.start_date>startissuedate) or (c.start_date>=startissuedate and c.start_date<=expirationissuedate) or (expirationissuedate=expire_date) or (expirationissuedate=expire_date) or c.chargereferences is null or c.chargereferences like '%null%' or c.chargereferences is not null
 ),
-
 
 max_renewal_row_term_number as (
 select 
 	pelcro_subid, 
 	max(termnumber) as last_adv_term_value 
-from renewal_row_no_in_between 
+from renewal_row_no_in_between
 group by pelcro_subid
 ),
 
@@ -575,13 +574,4 @@ select distinct
 	i.donortype
 	
 from individual_customers i
-order by i.pelcro_subid,termnumber,i.startissuedate)
-
-
-
-
-
-
-
-
-
+order by i.pelcro_subid,termnumber,i.startissuedate

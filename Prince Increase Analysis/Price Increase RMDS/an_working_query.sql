@@ -1,4 +1,4 @@
-create table dev.pelcro_records.an_ind as (/*Base Advantage Query for AN*/
+/*Base Advantage Query for AN*/
 with advantage_list_uncleaned as (
 select
     Expire.ShipToCustomerNumber,
@@ -384,6 +384,8 @@ select distinct
 	a.termnumber,
 	a.isautorenew,
 	a.startissuedate,
+	c.start_date,
+	c.chargereferences,
 	a.expirationissuedate,
 	a.rate,
 	case when (c.chargereferences like '%Liability%') then c.amountpaid
@@ -405,183 +407,24 @@ join (SELECT
 		ci.*
 	  FROM an_i ci
 	  join rolled_up_an ruc on ruc.subscriptionid=ci.subscriptionid and ruc.totalprice=ci.totalprice) c on c.subscriptionid=a.pelcro_subid
-where (c.start_date=expirationissuedate or c.start_date>startissuedate) or (c.start_date>=startissuedate and c.start_date<=expirationissuedate) or (expirationissuedate=expire_date) or c.chargereferences like '%null%' or c.chargereferences is not null)
+where (c.start_date=expirationissuedate or c.start_date>startissuedate) or (c.start_date>=startissuedate and c.start_date<=expirationissuedate) or (expirationissuedate=expire_date) or (expirationissuedate=expire_date) or c.chargereferences is null or c.chargereferences like '%null%' or c.chargereferences is not null
 ),
 
-
-max_renewal_row_term_number as (
-select 
-	pelcro_subid, 
-	max(termnumber) as last_adv_term_value 
-from renewal_row_no_in_between 
-group by pelcro_subid
-),
+min_start_date as (
+select shiptocustomernumber,ordernumber,pelcro_subid,adv_subid,min(renewalstartdate) as min_date from renewal_row_no_in_between group by shiptocustomernumber,ordernumber,pelcro_subid,adv_subid
+having count(*)>1),
 
 
 
-/*Union from Advantage and Renewal Row*/
-union_temp as (
-SELECT
-	*
-FROM non_linked_adv_rows
-
-union
-
-
-select 
-	* 
-from adv_pelcro_link
+union_renewal_row as (
+select r.* from renewal_row_no_in_between r 
+join min_start_date msd on msd.min_date=r.renewalstartdate
 
 union 
 
-select 
-	* 
-from renewal_row_no_in_between),
+select r.* from renewal_row_no_in_between r where not exists
+(select shiptocustomernumber,ordernumber,pelcro_subid,adv_subid from min_start_date)
+)
 
-
-
-/*Generating the Term Number*/
-adv_layer_data as (
-select 
-	original_adv_cust_value,
-	pelcro_subid,
-	max(expirationissuedate) as last_expiration_date,
-	max(termnumber) as last_adv_term_value 
-from union_temp
-group by original_adv_cust_value,pelcro_subid
-),
-
-/*Reorganizing the Pelcro Rows to be in the same format as Advantage*/
-pelcro_layers as (
-select distinct 
-	c.customeraccountid::varchar as shiptocustomernumber,
-	r.original_adv_cust_value::numeric as original_adv_cust_value,
-	cast(c.ordernumber as varchar),
-	c.orderdate,
-	c.brand,
-	c.publicationcode as pubcode,
-	c.subscriptionid as subid,
-	c.subscriptionid as pelcro_subid,
-	r.last_adv_term_value + row_number() over (partition by c.customeraccountid,c.subscriptionid order by c.start_date) as termnumber,
-	c.isautorenew,
-	c.start_date as startissuedate,
-	c.expire_date as expirationissuedate,
-	c.rate,
-	c.amountpaid,
-	case when c.termlength is null and extract(day from (expirationissuedate-startissuedate))<=31 then 'Monthly'
-		 when c.termlength is null and extract(day from (expirationissuedate-startissuedate))>=300 then 'Annual'
-		 when c.termlength is not null then c.termlength end as termlength,
-	cast(lead(ordernumber) over (partition by c.customeraccountid,c.subscriptionid order by c.start_date)as varchar) as renewalordernumber,
-	lead(start_date) over (partition by c.customeraccountid,c.subscriptionid order by c.start_date)::date as renewalstartdate,
-	lead(c.rate) over (partition by c.customeraccountid,c.subscriptionid order by c.start_date)::varchar as renewalrate,
-	c.donortype
-from an_i c
-left join adv_layer_data r on r.pelcro_subid=c.subscriptionid
-where c.expire_date>r.last_expiration_date
-	and planid is not null
-),
-
-new_cust as (
-select distinct
-	s.customeraccountid::varchar as shiptocustomernumber,
-	null::numeric as original_adv_cust_value,
-	case when sp.planinterval='month' then cast(s.subscriptionid as varchar)+i.invoiceid
-	  else cast(i.invoiceid as varchar) 
-	end as ordernumber,
-	i.paidatdatetime as orderdate,
-	i.businessunitcode as brand, 
-	i.planproductname as pubcode,
-	null::numeric as adv_subid,
-	i.susbcriptionid::numeric as pelcro_subid,
-	dense_rank() over (partition by i.susbcriptionid order by startissuedate) as termnumber,
-	case when sp.isautorenew is null then 'N'
-		else 'Y'
-	end as isautorenew,
-	case when i.subscriptioncurrentperiodstartdatetime is null then subscriptionstartdatetime
-	  else subscriptioncurrentperiodstartdatetime 
-	end as startissuedate,
-	i.subscriptioncurrentperiodenddatetime as expirationissuedate,
-	i.amountdue AS rate,
-	i.amountpaid,
-	case when sp.planinterval like '%year%' then 'Annual'
- 	  when sp.planinterval like '%month%' then 'Monthly'
- 	  when sp.planinterval like '%day%' then 'Day'
-	  when extract(day from (expirationissuedate-startissuedate))<=31 then 'Monthly'
-	  when extract(day from (expirationissuedate-startissuedate))>=300 then 'Annual' 
-	end as termlength,
-	lead(ordernumber) over (partition by pelcro_subid order by startissuedate) as renewalordernumber,
-	lead(startissuedate) over (partition by pelcro_subid order by startissuedate) as renewalstartdate,
-	lead(i.amountdue) over (partition by pelcro_subid order by startissuedate)::varchar as renewalrate,
-	case when s.iscorporate=TRUE then 'B'
-	  when s.isagency=TRUE then 'A'
-	  when s.iscomp=TRUE then 'C'
-	  when s.isgiftdonor then 'D'
-	  when s.isindividual=TRUE then 'I'
-	  else 'G' 
-	end as donortype
-from (select * from prod.pelcro.subscription s where oldproviderid is null) s
-join prod.pelcro.invoice i on i.susbcriptionid = s.subscriptionid 
-left join prod.pelcro.subscription_plan sp on sp.planid=i.planid
-where s.ispaid is true
-	and s.issourced is true
-	and i.businessunitcode like '%ANG'
-order by pelcro_subid,termnumber),
-
-
-
-
-/*Final Union*/
-final_temp as (
-select 
-	* 
-from union_temp
-
-union 
-
-select 
-	* 
-from pelcro_layers
-),
-
-individual_customers as (
-select distinct 
-	*
-from final_temp
-
-union 
-
-select distinct 
-	* 
-from new_cust)
-
-
-select distinct
-	i.shiptocustomernumber,
-	i.original_adv_cust_value,
-	i.ordernumber,
-	i.orderdate,
-	i.brand,
-	i.pubcode,
-	i.adv_subid,
-	i.pelcro_subid,
-	i.termnumber,
-	i.isautorenew,
-	i.startissuedate,
-	i.expirationissuedate,
-	i.rate,
-	i.termlength,
-	i.renewalordernumber,
-	i.renewalrate,
-	i.donortype
-	
-from individual_customers i
-order by i.pelcro_subid,termnumber,i.startissuedate)
-
-
-
-
-
-
-
-
+select * from union_renewal_row
 

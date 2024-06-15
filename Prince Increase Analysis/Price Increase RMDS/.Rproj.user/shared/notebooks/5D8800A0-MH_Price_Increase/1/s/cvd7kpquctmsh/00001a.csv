@@ -1,0 +1,20 @@
+"0","mh_adv_data%>%
+  filter(donortype==""I"")%>%
+  filter(expirationissuedate>=as.Date(""05/15/2023"",format=""%m/%d/%Y""))%>%
+  filter(startissuedate<=as.Date(""05/15/2023"",format=""%m/%d/%Y""))%>%
+  filter(expirationissuedate<=today())%>%
+  distinct()%>%
+  filter(og_termlength==4|og_termlength==52)%>%
+  group_by(publicationcode,og_termlength)%>%
+  summarise(active_users_at_price_increase=n_distinct(paste(shiptocustomernumber,billtocustomernumber)),
+            renewals_after_price_increase=n_distinct(ifelse(!is.na(renewaltermnumber),paste(shiptocustomernumber,billtocustomernumber),NA),na.rm=TRUE),
+            avg_rate_before_price_increase=mean(rate),
+            avg_rate_after_price_increase=mean(ifelse(!is.na(renewalrate),renewalrate,NA),na.rm=TRUE),
+            avg_term_for_renewals=mean(ifelse(!is.na(renewalrate),termnumber,NA),na.rm=TRUE),
+            avg_term_for_cancels=mean(ifelse(is.na(renewalrate),termnumber,NA),na.rm=TRUE),
+            total_renewal_revenue=sum(ifelse(!is.na(renewalrate),renewalrate,NA),na.rm=TRUE),
+            total_cancel_loss=-1*(sum(ifelse(is.na(renewalrate),rate,NA),na.rm=TRUE))
+            )
+"
+"1","[38;5;232m`summarise()` has grouped output by 'publicationcode'. You can override using the `.groups` argument.[39m
+"
