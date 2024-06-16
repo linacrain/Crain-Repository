@@ -1,0 +1,68 @@
+---
+title: "AA Price Increase"
+author: "Andrew Lin"
+date: "2024-06-16"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library("readr") 
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+
+aa_adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='AA'")
+aa_p_data<-dbGetQuery(prod,"Select * from prod.pelcro.subscription where businessunitcode='AA'")
+
+aa_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(startissuedate>=as.Date("01-01-2024",format="%m-%d-%Y"))%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(n=n())%>%
+  filter(n>1)%>%
+  arrange(shiptocustomernumber)
+
+aa_test_query<-dbGetQuery(prod, statement = read_file('aa_test_query.sql'))
+aa_working_query<-dbGetQuery(prod,statement=read_file('aa_working_query.sql'))
+```
+
+```{r}
+aa_adv_data%>%
+  filter(!subscriptionreference%in%aa_working_query$adv_subid)%>%
+  anti_join(aa_working_query,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))
+```
+
+```{r}
+aa_p_data%>%
+  filter(!subscriptionid%in%aa_working_query$pelcro_subid)%>%
+  filter(ispaid==TRUE)
+```
+
+```{r}
+aa_working_query%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
+  mutate(n=n())%>%
+  filter(n>1)%>%
+  arrange(original_adv_cust_value,ordernumber)
+```
+
+
+Standard Annual...
+```{r}
+aa_working_query%>%
+  
+```
+
+
+
+
+
