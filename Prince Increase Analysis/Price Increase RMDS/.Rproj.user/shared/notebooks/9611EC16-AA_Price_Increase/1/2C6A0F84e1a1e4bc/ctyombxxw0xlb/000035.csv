@@ -1,68 +1,8 @@
----
-title: "AA Price Increase"
-author: "Andrew Lin"
-date: "2024-06-16"
-output: html_document
----
-
-```{r}
-library(tidyverse)
-library(DBI)
-library(RPostgres)
-library("readr") 
-
-prod <- dbConnect(RPostgres::Postgres(),  
-               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
-               port = 5439,
-               user = 'aspireuser',
-               password = 'Aspirecrainredshift1',
-               dbname = 'prod',
-               sslmode='require')
-
-
-aa_adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='AA'")
-aa_p_data<-dbGetQuery(prod,"Select * from prod.pelcro.subscription where businessunitcode='AA'")
-
-aa_adv_data%>%
-  filter(donortype=="I")%>%
-  filter(startissuedate>=as.Date("01-01-2024",format="%m-%d-%Y"))%>%
-  group_by(shiptocustomernumber,ordernumber)%>%
-  mutate(n=n())%>%
-  filter(n>1)%>%
-  arrange(shiptocustomernumber)
-
-aa_test_query<-dbGetQuery(prod, statement = read_file('aa_test_query.sql'))
-aa_working_query<-dbGetQuery(prod,statement=read_file('aa_working_query.sql'))
-```
-
-```{r}
-aa_adv_data%>%
-  filter(!subscriptionreference%in%aa_working_query$adv_subid)%>%
-  anti_join(aa_working_query,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))
-```
-
-```{r}
-aa_p_data%>%
-  filter(!subscriptionid%in%aa_working_query$pelcro_subid)%>%
-  filter(ispaid==TRUE)
-```
-
-```{r}
-aa_working_query%>%
-  group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
-  mutate(n=n())%>%
-  filter(n>1)%>%
-  arrange(original_adv_cust_value,ordernumber)
-```
-
-
-Standard Annual Renewals
-```{r}
-aa_working_query%>%
-  filter(pubcode=="Standard")%>%
-  filter(orderdate<=as.Date("02-26-2024",format="%m-%d-%Y")&expirationissuedate>=as.Date("02-26-2024",format="%m-%d-%Y"))%>%
-  filter(donortype=="I")%>%
-  filter(termlength=="Annual")%>%
+"0","aa_working_query%>%
+  filter(pubcode==""Standard"")%>%
+  filter(orderdate<=as.Date(""02-26-2024"",format=""%m-%d-%Y"")&expirationissuedate>=as.Date(""02-26-2024"",format=""%m-%d-%Y""))%>%
+  filter(donortype==""I"")%>%
+  filter(termlength==""Annual"")%>%
   filter(rate<=399)%>%
   filter(rate!=0|rate!=0.01)%>%
   filter(rate<=169)%>%
@@ -85,9 +25,9 @@ aa_working_query%>%
             renewal_no_price_increase_revenue=sum(ifelse(renewalordernumber>0&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
             churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<=today(),199,NA),na.rm=TRUE),
             total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
-```
-
-
-
-
-
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength', 'rate'. You can override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'pubcode'. You can override using the `.groups` argument.[39m
+"
