@@ -1,27 +1,27 @@
 {
-    "id": "1E2BAA20",
-    "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/AA_Price_Increase.Rmd",
-    "project_path": "AA_Price_Increase.Rmd",
+    "id": "37DB5522",
+    "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/CCB_Price_Increase.Rmd",
+    "project_path": "CCB_Price_Increase.Rmd",
     "type": "r_markdown",
     "hash": "0",
     "contents": "",
     "dirty": false,
-    "created": 1718567492065.0,
+    "created": 1718651436379.0,
     "source_on_save": false,
-    "relative_order": 8,
+    "relative_order": 9,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "86,130",
-        "scrollLine": "77"
+        "cursorPosition": "111,60",
+        "scrollLine": "107"
     },
     "folds": "",
-    "lastKnownWriteTime": 1718651424,
+    "lastKnownWriteTime": 1718726677,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1718651424361,
+    "last_content_update": 1718726677414,
     "read_only": false,
     "read_only_alternatives": []
 }

@@ -1,0 +1,128 @@
+---
+title: "CCB Price Increase"
+author: "Andrew Lin"
+date: "2024-06-17"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library("readr") 
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+
+ccb_working_query<-dbGetQuery(prod,statement=read_file('ccb_working_query.sql'))
+ccb_adv_data<-dbGetQuery(prod,statement=read_file('ccb_adv_query.sql'))
+ccb_prod<-dbGetQuery(prod,"select * from prod.pelcro.subscription where businessunitcode='CCB'")
+
+
+ccb_working_query%>%
+  group_by(subscriptionid,ordernumber,customeraccountid)%>%
+  mutate(n=n())
+
+
+ccb_prod%>%
+  filter(ispaid==TRUE)%>%
+  filter(isindividual==TRUE)%>%
+  filter(!subscriptionid%in%ccb_working_query$subscriptionid)
+```
+
+
+```{r}
+list_of_migrated_adv_accounts<-ccb_working_query%>%
+  filter(donortype=="I")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  filter(!is.na(adv_sub_id))%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))
+  filter(orderdate<=as.Date("04-27-2024",format="%m-%d-%Y")&expire_date>=as.Date("04-27-2024",format="%m-%d-%Y"))
+```
+
+```{r}
+last_term<-ccb_adv_data%>%
+  filter(subscriptionreference%in%list_of_migrated_adv_accounts$adv_sub_id&ordernumber%in%list_of_migrated_adv_accounts$adv_order_number)%>%
+  group_by(subscriptionreference,ordernumber)%>%
+  summarise(m=max(termnumber),
+            f=max(expirationissuedate))
+```
+```{r}
+ccb_list<-ccb_working_query%>%
+  filter(donortype=="I")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c("adv_sub_id"="subscriptionreference","adv_order_number"="ordernumber"))%>%
+  separate(start_date,into=c("start_date","start_time"),sep=" ")%>%
+  separate(orderdate,into=c("order_date","order_time"),sep=" ")%>%
+  separate(expire_date,into=c("expire_date","expire_time"),sep=" ")%>%
+  mutate(order_date=ifelse(is.na(order_date),start_date,order_date))%>%
+  mutate(order_date=as.Date(order_date,format="%Y-%m-%d"))%>%
+  mutate(start_date=as.Date(start_date,format="%Y-%m-%d"))%>%
+  mutate(expire_date=as.Date(expire_date,format="%Y-%m-%d"))%>%
+  mutate(termnumber=row_number()-1)%>%
+  mutate(termnumber=ifelse(f==start_date,m,termnumber+m))%>%
+  select(subscriptionid,ordernumber,customeraccountid,termnumber,termlength,isautorenew,totalprice,publicationcode,donortype,start_date,expire_date,rate,order_date)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(ordernumber=ifelse(is.na(ordernumber),paste(subscriptionid,termnumber),ordernumber))%>%
+  mutate(termnumber=ifelse(is.na(termnumber),row_number(),termnumber))%>%
+  mutate(renewaltermnumber=lead(termnumber,order_by=c(start_date)),
+         renewalrate=lead(rate,order_by=c(start_date)),
+         renewalpublicationcode=lead(publicationcode,order_by=c(start_date)),
+         renewalorderdate=lead(order_date,order_by=c(start_date)),
+         renewalstartdate=lead(start_date,order_by=c(start_date)),
+         renewaltermlength=lead(termlength,order_by=c(start_date)),
+         renewalordernumber=lead(ordernumber,order_by=start_date))
+```
+
+
+```{r}
+ccb_list
+```
+
+
+Annual Customers
+
+```{r}
+ccb_list%>%
+  filter(termlength=="Annual")%>%
+  filter(order_date<=as.Date("03-14-2024",format="%m-%d-%Y")&expire_date>=as.Date("04-27-2024",format="%m-%d-%Y"))%>%
+  filter(!str_detect(publicationcode,"Data|Plus|Health"))%>%
+  filter(publicationcode!="Print")%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(publicationcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(customeraccountid,ordernumber,subscriptionid)),
+            n_distinct_renewals_increase=n_distinct(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(is.na(renewalorderdate)&expire_date>=today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(is.na(renewalorderdate)&expire_date<today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_pi_renewal=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),termnumber,NA),na.rm=TRUE),
+            renewal_price_increase_revenue=sum(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),as.numeric(renewalrate),NA),na.rm=TRUE),
+            renewal_no_price_increase_revenue=sum(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Basic Digital",199,
+                                     ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Premium",225,NA)),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
+  
+```
+
+
+```{r}
+ccb_list%>%
+  filter(expire_date>=as.Date("04-08-2024",format="%d-%m-%Y"))
+  
+```
+
+
+
