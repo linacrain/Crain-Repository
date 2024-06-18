@@ -1,1 +1,0 @@
-{"frames":[{"func":"filter(orderdate <= as.Date(\"04-27-2024\", format = \"%m-%d-%Y\") & \n    expire_date >= as.Date(\"04-27-2024\", format = \"%m-%d-%Y\"))","file":"","line_number":0,"end_line_number":0,"character_number":0,"end_character_number":0}],"message":"Error: object 'orderdate' not found\n"}

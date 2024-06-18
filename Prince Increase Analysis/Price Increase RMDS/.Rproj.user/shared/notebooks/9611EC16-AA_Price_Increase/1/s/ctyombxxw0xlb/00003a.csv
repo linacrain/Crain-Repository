@@ -1,0 +1,33 @@
+"0","aa_investigation%>%
+  filter(pubcode==""Standard"")%>%
+  filter(orderdate<=as.Date(""02-26-2024"",format=""%m-%d-%Y"")&expirationissuedate>=as.Date(""02-26-2024"",format=""%m-%d-%Y""))%>%
+  filter(donortype==""I"")%>%
+  filter(termlength==""Annual"")%>%
+  filter(rate<=399)%>%
+  filter(rate!=0|rate!=0.01)%>%
+  filter(rate<=169)%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals_increase=n_distinct(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(renewalordernumber>0&renewalrate<=rate,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_pi_renewal=mean(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),termnumber,NA),na.rm=TRUE),
+            renewal_price_increase_revenue=sum(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),as.numeric(renewalrate),NA),na.rm=TRUE),
+            renewal_no_price_increase_revenue=sum(ifelse(renewalordernumber>0&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<=today(),199,NA),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength', 'rate'. You can override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'pubcode'. You can override using the `.groups` argument.[39m
+"

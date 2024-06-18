@@ -1,4 +1,0 @@
-"0","  filter(orderdate<=as.Date(""04-27-2024"",format=""%m-%d-%Y"")&expire_date>=as.Date(""04-27-2024"",format=""%m-%d-%Y""))
-"
-"2","Error: object 'orderdate' not found
-"

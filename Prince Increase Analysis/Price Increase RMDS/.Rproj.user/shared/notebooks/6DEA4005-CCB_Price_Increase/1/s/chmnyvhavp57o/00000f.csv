@@ -1,0 +1,4 @@
+"0","ccb_working_query<-dbGetQuery(prod,statement=read_file('ccb_working_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  column reference ""isautorenew"" is ambiguous
+"

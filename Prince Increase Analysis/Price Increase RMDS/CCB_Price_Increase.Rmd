@@ -24,10 +24,35 @@ ccb_working_query<-dbGetQuery(prod,statement=read_file('ccb_working_query.sql'))
 ccb_adv_data<-dbGetQuery(prod,statement=read_file('ccb_adv_query.sql'))
 ccb_prod<-dbGetQuery(prod,"select * from prod.pelcro.subscription where businessunitcode='CCB'")
 
+ccb_autorenew<-dbGetQuery(prod,statement=read_file('ccb_autorenew_investigatin.sql'))
+```
+
+
+```{r}
+ccb_working_query%>%
+  filter(donortype=="I")%>%
+  filter(termlength=="Monthly")%>%
+  filter(orderdate<=as.Date("03-14-2024",format="%m-%d-%Y")&expire_date>=as.Date("04-08-2024",format="%m-%d-%Y"))%>%
+  filter(!str_detect(publicationcode,"Data|Plus|Health"))%>%
+  filter(publicationcode!="Print")%>%
+  group_by(isautorenew)
+
+
+ccb_working_query%>%
+  group_by(isautorenew)%>%
+  summarise(n=n())
+```
+
+
+
+```{r}
+
 
 ccb_working_query%>%
   group_by(subscriptionid,ordernumber,customeraccountid)%>%
-  mutate(n=n())
+  mutate(n=n())%>%
+  filter(n>1)
+
 
 
 ccb_prod%>%
@@ -120,9 +145,33 @@ ccb_list%>%
 
 ```{r}
 ccb_list%>%
-  filter(expire_date>=as.Date("04-08-2024",format="%d-%m-%Y"))
+  filter(termlength=="Monthly")%>%
+  filter(order_date<=as.Date("03-14-2024",format="%m-%d-%Y")&expire_date>=as.Date("04-08-2024",format="%m-%d-%Y"))%>%
+  filter(!str_detect(publicationcode,"Data|Plus|Health"))%>%
+  filter(publicationcode!="Print")%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(subscriptionid,ordernumber,customeraccountid)%>%
+  mutate(min_date=min(order_date))%>%
+  filter(order_date==min_date)%>%
+  group_by(publicationcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(customeraccountid,ordernumber,subscriptionid)),
+            n_distinct_renewals_increase=n_distinct(ifelse((!is.na(renewalordernumber)&renewalrate>=18&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=20&publicationcode=="Premium"),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(is.na(renewalorderdate)&expire_date>=today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(is.na(renewalorderdate)&expire_date<today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=18&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=20&publicationcode=="Premium"),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_pi_renewal=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=18&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=20&publicationcode=="Premium"),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),termnumber,NA),na.rm=TRUE),
+            renewal_price_increase_revenue=sum(ifelse((!is.na(renewalordernumber)&renewalrate>=18&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=20&publicationcode=="Premium"),as.numeric(renewalrate),NA),na.rm=TRUE),
+            renewal_no_price_increase_revenue=sum(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Basic Digital",18,
+                                     ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Premium",20,NA)),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
   
 ```
-
+```{r}
+ccb_list
+```
 
 

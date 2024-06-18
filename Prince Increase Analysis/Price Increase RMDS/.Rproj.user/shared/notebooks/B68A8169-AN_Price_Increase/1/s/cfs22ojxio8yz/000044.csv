@@ -1,0 +1,27 @@
+"0","an_query%>%"
+"0","  filter(donortype==""I"")%>%"
+"0","  filter(orderdate>=as.Date(""12/15/2023"",format=""%m/%d/%Y"")&termnumber==1)%>%"
+"0","  filter(pubcode==""Basic Digital""|pubcode==""Premium"")%>%"
+"0","  mutate(pubcode=ifelse(pubcode==""AN3"",""Digital All Access"",pubcode))%>%"
+"0","  mutate(termnumber=as.numeric(termnumber))%>%"
+"0","  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,startissuedate,expirationissuedate)%>%"
+"0","  summarise(renewalrate=max(renewalrate),"
+"0","            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%"
+"0","  ungroup()%>%"
+"0","  group_by(pubcode,termlength,isautorenew)%>%"
+"0","  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),"
+"0","            n_distinct_renewals=n_distinct(ifelse(renewalordernumber>0,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),"
+"0","            n_distinct_undetermined_contracts=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),"
+"0","            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),"
+"0","            mean_rate_renewal_price_increase=mean(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),"
+"0","            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),"
+"0","            median_rate_renewal_price_increase=median(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),"
+"0","            median_rate_churn_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),"
+"0","            initial_new_user_revenue=sum(rate))"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength', 'rate', 'startissuedate'. You can override using the `.groups`
+argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'pubcode', 'termlength'. You can override using the `.groups`
+argument.[39m
+"

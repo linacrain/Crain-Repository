@@ -31,24 +31,26 @@ aa_adv_data%>%
   filter(n>1)%>%
   arrange(shiptocustomernumber)
 
-aa_test_query<-dbGetQuery(prod, statement = read_file('aa_test_query.sql'))
+aa_test_query<-dbGetQuery(prod,statement = read_file('aa_test_query.sql'))
 aa_working_query<-dbGetQuery(prod,statement=read_file('aa_working_query.sql'))
+
+aa_investigation<-dbGetQuery(prod,statement=read_file('aa_investigation.sql'))
 ```
 
 ```{r}
 aa_adv_data%>%
-  filter(!subscriptionreference%in%aa_working_query$adv_subid)%>%
+  filter(!subscriptionreference%in%aa_investigation$adv_subid)%>%
   anti_join(aa_working_query,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))
 ```
 
 ```{r}
 aa_p_data%>%
-  filter(!subscriptionid%in%aa_working_query$pelcro_subid)%>%
+  filter(!subscriptionid%in%aa_investigation$pelcro_subid)%>%
   filter(ispaid==TRUE)
 ```
 
 ```{r}
-aa_working_query%>%
+aa_investigation%>%
   group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
   mutate(n=n())%>%
   filter(n>1)%>%
@@ -58,7 +60,7 @@ aa_working_query%>%
 
 Standard Annual Renewals
 ```{r}
-aa_working_query%>%
+aa_investigation%>%
   filter(pubcode=="Standard")%>%
   filter(orderdate<=as.Date("02-26-2024",format="%m-%d-%Y")&expirationissuedate>=as.Date("02-26-2024",format="%m-%d-%Y"))%>%
   filter(donortype=="I")%>%
@@ -87,7 +89,35 @@ aa_working_query%>%
             total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
 ```
 
-
+```{r}
+aa_investigation%>%
+  filter(pubcode=="Standard")%>%
+  filter(orderdate<=as.Date("02-26-2024",format="%m-%d-%Y")&expirationissuedate>=as.Date("02-26-2024",format="%m-%d-%Y"))%>%
+  filter(donortype=="I")%>%
+  filter(termlength=="Monthly")
+  filter(rate<=399)%>%
+  filter(rate!=0|rate!=0.01)%>%
+  filter(rate<=169)%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals_increase=n_distinct(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(renewalordernumber>0&renewalrate<=rate,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_pi_renewal=mean(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),termnumber,NA),na.rm=TRUE),
+            renewal_price_increase_revenue=sum(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),as.numeric(renewalrate),NA),na.rm=TRUE),
+            renewal_no_price_increase_revenue=sum(ifelse(renewalordernumber>0&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<=today(),199,NA),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
+```
 
 
 

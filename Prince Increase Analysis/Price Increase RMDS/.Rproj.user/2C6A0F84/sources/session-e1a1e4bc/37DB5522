@@ -3,7 +3,7 @@
     "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/CCB_Price_Increase.Rmd",
     "project_path": "CCB_Price_Increase.Rmd",
     "type": "r_markdown",
-    "hash": "0",
+    "hash": "3390042169",
     "contents": "",
     "dirty": false,
     "created": 1718651436379.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "111,60",
-        "scrollLine": "107"
+        "cursorPosition": "43,0",
+        "scrollLine": "36"
     },
     "folds": "",
-    "lastKnownWriteTime": 1718726677,
+    "lastKnownWriteTime": 1718739971,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1718726677414,
+    "last_content_update": 1718739971356,
     "read_only": false,
     "read_only_alternatives": []
 }

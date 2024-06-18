@@ -3,7 +3,7 @@
     "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/AN_Individual_query.sql",
     "project_path": "AN_Individual_query.sql",
     "type": "sql",
-    "hash": "2673737138",
+    "hash": "0",
     "contents": "",
     "dirty": false,
     "created": 1718462696795.0,
@@ -12,15 +12,15 @@
     "properties": {
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "558,27",
-        "scrollLine": "551"
+        "cursorPosition": "94,16",
+        "scrollLine": "79"
     },
     "folds": "",
-    "lastKnownWriteTime": 1718483597,
+    "lastKnownWriteTime": 1718744862,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1718483597339,
+    "last_content_update": 1718744862522,
     "read_only": false,
     "read_only_alternatives": []
 }

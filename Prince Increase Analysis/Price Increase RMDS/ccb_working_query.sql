@@ -72,6 +72,9 @@ SELECT distinct
 	else i.planid
 	end as planid,
 	i.amountpaid as amountpaid,
+	case when i.billingtype like '%charge%' then 'Y'
+		else 'N'
+	end as isautorenew,
 	i.paidatdatetime as orderdate
 FROM prod.pelcro.subscription s
 left join rolled_up_invoice i on i.susbcriptionid = s.subscriptionid
@@ -93,14 +96,12 @@ start_date,
 expire_date,
 rate,
 amountpaid,
+c.isautorenew,
 orderdate,
 case when ps.planinterval like '%year%' then 'Annual'
 		 when ps.planinterval like '%month%' then 'Monthly'
 		 when ps.planinterval is null and isannualterm=true then 'Annual'
 		 when ps.planinterval is null and ismonthlyterm=true then 'Monthly'
-	else 'day' end as termlength,
-case when ps.isautorenew is null then 'N'
-		else 'Y'
-	end as isautorenew
+	else 'day' end as termlength
 from ccb_i c
 left join prod.pelcro.subscription_plan ps on ps.planid=c.planid

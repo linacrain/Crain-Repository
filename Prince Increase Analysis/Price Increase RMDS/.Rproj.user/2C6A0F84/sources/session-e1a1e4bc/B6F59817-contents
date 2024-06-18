@@ -93,7 +93,7 @@ join max_charge m on m.susbcriptionid=r.susbcriptionid and m.max_charge=r.charge
 
 
 /*CNY Individual Existing Users*/
-AA_I as (
+AA_I_t as (
 SELECT distinct
 	cast(regexp_replace(s.oldproviderid,'[^0-9]','') as float) as adv_sub_id,
 	case when i.susbcriptionid is null then s.subscriptionid
@@ -101,14 +101,6 @@ SELECT distinct
 	i.invoiceid as ordernumber,
 		case when i.customeraccountid is null then s.customeraccountid
 		else i.customeraccountid end as customeraccountid,
-	case when ps.planinterval like '%year%' then 'Annual'
-		 when ps.planinterval like '%month%' then 'Monthly'
-		 when ps.planinterval is null and isannualterm=true then 'Annual'
-		 when ps.planinterval is null and ismonthlyterm=true then 'Monthly'
-	else 'day' end as termlength,
-	case when ps.isautorenew is null then 'N'
-		else 'Y'
-	end as isautorenew,
 	case when i.businessunitcode is null then s.businessunitcode
 		else i.businessunitcode end as brand,
 	case when i.amountdue is null then s.planamount 
@@ -128,17 +120,35 @@ SELECT distinct
 		 when i.subscriptioncurrentperiodenddatetime is null then s.currentperiodenddatetime end as expire_date,
 	case when i.planamount is not null then i.planamount
 		else price end AS rate,
-	i.planid as planid,
+	case when i.planid is null then s.planid
+	else i.planid end as planid,
 	i.chargereferences,
+	i.billingtype,
 	i.amountpaid as amountpaid,
 	i.paidatdatetime as orderdate
 FROM prod.pelcro.subscription s
 left join rolled_up_invoice i on i.susbcriptionid = s.subscriptionid
-left join prod.pelcro.subscription_plan ps on ps.planid=i.planid
 where s.businessunitcode = 'AA'
 	and s.ispaid is true
 	and oldproviderid is not null
 order by currentperiodenddatetime
+),
+
+aa_i as (
+select 
+  ait.*,
+  case when i.billingtype like '%charge%' then 'Y'
+	     when i.billingtype like '%send%' else 'N'
+	     when i.billingtype is null and ps.isautorenew is null then 'N'
+		else 'Y'
+	end as isautorenew,
+  case when ps.planinterval like '%year%' then 'Annual'
+		 when ps.planinterval like '%month%' then 'Monthly'
+		 when ps.planinterval is null and isannualterm=true then 'Annual'
+		 when ps.planinterval is null and ismonthlyterm=true then 'Monthly'
+	else 'day' end as termlength	
+from aa_i_t ait 
+left join prod.pelcro.subscription_plan ps on ps.planid=ait.planid
 ),
 	
 adv_pelcro_index as (
@@ -412,8 +422,7 @@ join (SELECT
 	  FROM aa_i ci
 	  join rolled_up_aa ruc on ruc.subscriptionid=ci.subscriptionid and ruc.totalprice=ci.totalprice) c on c.subscriptionid=a.pelcro_subid
 where (c.start_date=expirationissuedate or c.start_date>startissuedate) or (c.start_date>=startissuedate and c.start_date<=expirationissuedate) or (expirationissuedate=expire_date) or (start_date<=startissuedate and expire_date<=expirationissuedate) or c.chargereferences like '%null%' or c.chargereferences is not null
-)
-,
+),
 
 
 max_renewal_row_term_number as (
@@ -488,7 +497,7 @@ where c.expire_date>r.last_expiration_date
 	and planid is not null
 ),
 
-new_cust as (
+new_cust_t as (
 select distinct
 	s.customeraccountid::varchar as shiptocustomernumber,
 	null::numeric as original_adv_cust_value,
@@ -501,21 +510,12 @@ select distinct
 	null::numeric as adv_subid,
 	i.susbcriptionid::numeric as pelcro_subid,
 	dense_rank() over (partition by i.susbcriptionid order by startissuedate) as termnumber,
-	case when sp.isautorenew is null then 'N'
-		else 'Y'
-	end as isautorenew,
 	case when i.subscriptioncurrentperiodstartdatetime is null then subscriptionstartdatetime
 	  else subscriptioncurrentperiodstartdatetime 
 	end as startissuedate,
 	i.subscriptioncurrentperiodenddatetime as expirationissuedate,
 	i.amountdue AS rate,
 	i.amountpaid,
-	case when sp.planinterval like '%year%' then 'Annual'
- 	  when sp.planinterval like '%month%' then 'Monthly'
- 	  when sp.planinterval like '%day%' then 'Day'
-	  when extract(day from (expirationissuedate-startissuedate))<=31 then 'Monthly'
-	  when extract(day from (expirationissuedate-startissuedate))>=300 then 'Annual' 
-	end as termlength,
 	lead(ordernumber) over (partition by pelcro_subid order by startissuedate) as renewalordernumber,
 	lead(startissuedate) over (partition by pelcro_subid order by startissuedate) as renewalstartdate,
 	lead(i.amountdue) over (partition by pelcro_subid order by startissuedate)::varchar as renewalrate,
@@ -525,14 +525,46 @@ select distinct
 	  when s.isgiftdonor then 'D'
 	  when s.isindividual=TRUE then 'I'
 	  else 'G' 
-	end as donortype
+	end as donortype,
+	i.billingtype
 from (select * from prod.pelcro.subscription s where oldproviderid is null) s
 join prod.pelcro.invoice i on i.susbcriptionid = s.subscriptionid 
-left join prod.pelcro.subscription_plan sp on sp.planid=i.planid
 where s.ispaid is true
 	and s.issourced is true
 	and i.businessunitcode='AA'
 order by pelcro_subid,termnumber),
+
+
+new_cust as (
+select 
+nc.shiptocustomernumber,
+nc.original_adv_cust_value,
+nc.ordernumber,
+nc.orderdate,
+nc.brand,
+nc.pubcode,
+nc.adv_subid,
+case when nc.billingtype like '%charge%' then 'Y'
+     when nc.billingtype like '%send%' then 'N'
+     when nc.billingtype is null and ps.isautorenew is null then 'N'
+else 'Y'
+end as isautorenew,
+nc.startissuedate,
+nc.expirationissuedate,
+nc.rate,
+nc.amountpaid,
+case when ps.planinterval like '%year%' then 'Annual'
+ 	  when ps.planinterval like '%month%' then 'Monthly'
+ 	  when ps.planinterval like '%day%' then 'Day'
+	  when extract(day from (expirationissuedate-startissuedate))<=31 then 'Monthly'
+	  when extract(day from (expirationissuedate-startissuedate))>=300 then 'Annual' 
+	end as termlength,
+nc.renewalordernumber,
+nc.renewalstartdate,
+nc.renewalrate,
+nc.donortype
+from new_cust_t nc left join prod.pelcro.subscription_plan ps on ps.planid=nc.planid
+),
 
 
 

@@ -1,5 +1,0 @@
-"0","aa_test_query<-dbGetQuery(prod, statement = read_file('aa_test_query.sql'))
-"
-"2","Error: Failed to prepare query : ERROR:  operator does not exist: boolean & timestamp without time zone
-HINT:  No operator matches the given name and argument type(s). You may need to add explicit type casts.
-"
