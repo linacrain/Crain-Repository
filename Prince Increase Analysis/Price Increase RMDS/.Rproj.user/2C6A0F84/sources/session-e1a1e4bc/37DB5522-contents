@@ -170,8 +170,31 @@ ccb_list%>%
             total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
   
 ```
+Annual New Orders
+
+
 ```{r}
-ccb_list
+ccb_list%>%
+  filter(termlength=="Annual")%>%
+  filter(order_date>=as.Date("03-14-2024",format="%m-%d-%Y")&termnumber==1)%>%
+  filter(!str_detect(publicationcode,"Data|Plus|Health"))%>%
+  filter(publicationcode!="Print")%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(publicationcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(customeraccountid,ordernumber,subscriptionid)),
+            n_distinct_renewals_increase=n_distinct(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(is.na(renewalorderdate)&expire_date>=today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(is.na(renewalorderdate)&expire_date<today(),paste(customeraccountid,ordernumber,subscriptionid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_pi_renewal=mean(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(is.na(renewalordernumber)&expire_date<today(),termnumber,NA),na.rm=TRUE),
+            renewal_price_increase_revenue=sum(ifelse((!is.na(renewalordernumber)&renewalrate>=199&publicationcode=="Basic Digital")|(!is.na(renewalordernumber)&renewalrate>=225&publicationcode=="Premium"),as.numeric(renewalrate),NA),na.rm=TRUE),
+            renewal_no_price_increase_revenue=sum(ifelse(!is.na(renewalordernumber)&renewalrate<=rate,as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Basic Digital",199,
+                                     ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Premium",225,NA)),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
 ```
 
 

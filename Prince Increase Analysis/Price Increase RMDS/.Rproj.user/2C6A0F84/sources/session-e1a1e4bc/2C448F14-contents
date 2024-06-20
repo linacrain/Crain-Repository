@@ -615,8 +615,8 @@ select distinct
 	i.termlength,
 	i.renewalordernumber,
 	i.renewalrate,
+	i.renewalstartdate,
 	i.donortype
-	
 from individual_customers i
 order by i.pelcro_subid,termnumber,i.startissuedate
 

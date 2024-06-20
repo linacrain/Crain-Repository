@@ -51,6 +51,7 @@ aa_p_data%>%
 
 ```{r}
 aa_investigation%>%
+  distinct()%>%
   group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
   mutate(n=n())%>%
   filter(n>1)%>%
@@ -61,6 +62,7 @@ aa_investigation%>%
 Standard Annual Renewals
 ```{r}
 aa_investigation%>%
+  distinct()%>%
   filter(pubcode=="Standard")%>%
   filter(orderdate<=as.Date("02-26-2024",format="%m-%d-%Y")&expirationissuedate>=as.Date("02-26-2024",format="%m-%d-%Y"))%>%
   filter(donortype=="I")%>%
@@ -119,5 +121,9 @@ aa_investigation%>%
             total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
 ```
 
+```{r}
+aa_adv_data%>%
+  filter(subscriptionreference==19025046)%>%
 
+```
 

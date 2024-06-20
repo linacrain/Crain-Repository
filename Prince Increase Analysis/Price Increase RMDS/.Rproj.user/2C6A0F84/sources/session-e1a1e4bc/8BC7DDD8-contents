@@ -1,0 +1,30 @@
+---
+title: "Test for Inflow Reporting"
+author: "Andrew Lin"
+date: "2024-06-20"
+output: html_document
+---
+
+```{r}
+
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+test<-dbGetQuery(prod,statement=read_file('test_super_query.sql'))
+cdb_t<-dbGetQuery(prod,statement=read_file('cdb_query.sql'))
+
+```
+
+```{r}
+
+cdb_t%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
+  mutate(n=n())%>%
+  filter(n>1)
+```
