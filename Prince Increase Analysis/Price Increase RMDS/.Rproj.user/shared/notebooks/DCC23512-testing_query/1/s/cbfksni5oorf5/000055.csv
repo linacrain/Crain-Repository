@@ -1,0 +1,5 @@
+"0","test<-dbGetQuery(prod,statement=read_file('test_super_query.sql'))
+"
+"2","Warning:"
+"2"," Closing open result set, cancelling previous query
+"

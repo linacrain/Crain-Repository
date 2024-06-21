@@ -46,20 +46,236 @@ ccb_working_query%>%
 
 
 ```{r}
+reduced<-ccb_adv_data%>%
+  filter(startissuedate>=as.Date("2016-01-01",format="%Y-%m-%d"))%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(pub_level=ifelse(publicationcode=='CB1',1,
+                          ifelse(publicationcode=='CB2',2,
+                          ifelse(publicationcode=='CB3',3,4))),
+         did_renew=ifelse(is.na(renewalordernumber),0,1),
+         did_renew=max(did_renew))%>%
+  mutate(max_pub=max(pub_level),
+         termnumber=max(termnumber),
+         rate=sum(rate),
+         renewalrate=sum(renewalrate,na.rm=TRUE),
+         )%>%
+  filter(pub_level==max_pub)
 
 
-ccb_working_query%>%
-  group_by(subscriptionid,ordernumber,customeraccountid)%>%
-  mutate(n=n())%>%
-  filter(n>1)
+
+migration_rows<-ccb_autorenew%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(renewalordernumber=lead(ordernumber,order_by=subscriptionid),
+         renewalrate=lead(rate,order_by=subscriptionid),
+         renewalstartdate=lead(start_date,order_by=subscriptionid))%>%
+  ungroup()%>%
+  filter(!is.na(adv_sub_id))%>%
+  group_by(subscriptionid,adv_sub_id,adv_order_number)%>%
+  mutate(min_date=min(start_date))%>%
+  filter(min_date==start_date)
+
+migrated_rows<-reduced%>%
+  left_join(migration_rows,by=c('subscriptionreference'='adv_sub_id','ordernumber'='adv_order_number'))%>%
+  filter(!is.na(rate.y))%>%
+  mutate(original_adv_cust_value=as.numeric(shiptocustomernumber),
+         shiptocustomernumber=as.character(shiptocustomernumber),
+         pubcode=publicationcode.y,
+         termlength=termlength.x,
+         rate=rate.x,
+         orderdate=orderdate.x,
+         brand='CCB',
+         adv_subid=subscriptionreference,
+         pelcro_subid=subscriptionid,
+         isautorenew=isautorenew.x,
+         donortype=donortype.y,
+         renewalordernumber=as.character(renewalordernumber.y),
+         renewalrate=renewalrate.y,
+         renewalstartdate=renewalstartdate.y,
+         ordernumber=as.character(ordernumber)
+         )%>%
+   select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+
+adv_rows<-reduced%>%
+  ungroup()%>%
+  filter(!ordernumber%in%migrated_rows$ordernumber)%>%
+  group_by(shiptocustomernumber)%>%
+  arrange(termnumber,.by_group=TRUE)
 
 
+advantage_rows<-adv_rows%>%
+  mutate(original_adv_cust_value=as.double(shiptocustomernumber),
+         shiptocustomernumber=as.character(shiptocustomernumber),
+         pubcode=publicationcode,
+         adv_subid=subscriptionreference,
+         pelcro_subid=NA,
+         brand=owningoffice)%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)%>%
+  filter(donortype=="I")
+  
+pelcro_rows<-ccb_autorenew%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(renewalordernumber=lead(ordernumber,order_by=subscriptionid),
+         renewalrate=lead(rate,order_by=subscriptionid),
+         renewalstartdate=lead(start_date,order_by=subscriptionid))%>%
+  ungroup()%>%
+  filter(is.na(adv_sub_id)|!ordernumber%in%migration_rows)%>%
+  group_by(subscriptionid,adv_sub_id,adv_order_number)
+
+migration_termnumber<-migrated_rows%>%
+  group_by(pelcro_subid,original_adv_cust_value)%>%
+  summarise(m=max(termnumber))
+
+p_rows<-pelcro_rows%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  left_join(migration_termnumber,by=c("subscriptionid"="pelcro_subid"))%>%
+  mutate(row_number=row_number())%>%
+  mutate(termnumber=ifelse(is.na(m),0,m)+row_number)%>%
+  mutate(shiptocustomernumber=as.character(customeraccountid),
+         pelcro_subid=subscriptionid,
+         renewalordernumber=as.character(renewalordernumber),
+         pubcode=publicationcode,
+         adv_subid=adv_sub_id,
+         startissuedate=start_date,
+         expirationissuedate=expire_date,
+         ordernumber=as.character(ordernumber)
+         )%>%
+  ungroup()%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+```
+
+```{r}
+ccb_data<-advantage_rows%>%
+  union(migrated_rows)%>%
+  union(p_rows)%>%
+  mutate(orderdate=as.character(orderdate),
+         startissuedate=as.character(startissuedate),
+         expirationissuedate=as.character(expirationissuedate),
+         renewalrate=as.character(renewalrate),
+         renewalstartdate=as.character(renewalstartdate),
+         pelcro_subid=as.double(pelcro_subid))
+```
+
+```{r}
+missing_adv_data_ccb<-ccb_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(startissuedate>=as.Date("2016-01-01",format="%Y-%m-%d"))%>%
+  filter(!subscriptionreference%in%ccb_data$subscriptionreference)%>%
+  left_join(ccb_data,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))%>%
+  filter(is.na(shiptocustomernumber.y))%>%
+  distinct()%>%
+  mutate(original_adv_cust_value=as.double(shiptocustomernumber),
+         shiptocustomernumber=as.character(shiptocustomernumber),
+         pelcro_subid=NA,
+         brand='CCB',
+         pubcode=publicationcode,
+         adv_subid=subscriptionreference,
+         startissuedate=as.character(startissuedate.x),
+         expirationissuedate=as.character(expirationissuedate.x),
+         ordernumber=as.character(ordernumber),
+         renewalordernumber=renewalordernumber.x,
+         rate=rate.x,
+         termlength=termlength.x,
+         isautorenew=isautorenew.x,
+         renewalstartdate=as.character(renewalstartdate.x),
+         renewalrate=as.character(renewalrate.x),
+         orderdate=as.character(orderdate.x),
+         termnumber=termnumber.x,
+         donortype=donortype.x
+         )%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+  
+```
+````{r}
+test
 
 ccb_prod%>%
-  filter(ispaid==TRUE)%>%
-  filter(isindividual==TRUE)%>%
-  filter(!subscriptionid%in%ccb_working_query$subscriptionid)
+  filter(!subscriptionid%in%ccb_autorenew$subscriptionid)%>%
+  filter(ispaid==TRUE)
 ```
+
+```{r}
+ccb_adv_data%>%
+  filter(donortype=="I")%>%
+  filter(startissuedate>=as.Date("2016-01-01",format="%Y-%m-%d"))%>%
+  filter(!ordernumber%in%ccb_data$ordernumber&!shiptocustomernumber%in%ccb_data$original_adv_cust_value)
+  filter(!shiptocustomernumber%in5)
+  left_join(ccb_data,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))%>%
+  filter(is.na(shiptocustomernumber.y))%>%
+  distinct()
+```
+```{r}
+reduced%>%
+  ungroup()%>%
+  filter(!ordernumber%in%migrated_rows$ordernumber)%>%
+  group_by(shiptocustomernumber)%>%
+  arrange(termnumber,.by_group=TRUE)%>%
+   mutate(original_adv_cust_value=as.double(shiptocustomernumber),
+         shiptocustomernumber=as.character(shiptocustomernumber),
+         pubcode=publicationcode,
+         adv_subid=subscriptionreference,
+         pelcro_subid=NA,
+         brand=owningoffice)%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)%>%
+  filter(ordernumber=="C9988728")
+```
+```{r}
+full_list_excluding<-test%>%
+  union(ccb_data)%>%
+  union(missing_adv_data_ccb)%>%
+  union(adv_data_anc)
+
+write.csv(full_list_excluding_ac,"full_list_excluding_ac.csv")
+write.csv(full_list_excluding,"full_list_mapped.csv")
+
+
+```
+```{r}
+new_ccb_users<-ccb_working_query%>%
+  filter(donortype=="I")%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  filter(is.na(adv_sub_id))
+
+migration_rows<-ccb_working_query%>%
+  filter(donortype=="I")%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  filter(!is.na(adv_sub_id))%>%
+  group_by(subscriptionid)%>%
+  mutate(min_start_date=min(start_date))%>%
+  filter(min_start_date==start_date)
+
+pelcro_layers<-ccb_working_query%>%
+  filter(donortype=="I")%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  filter(!is.na(adv_sub_id))%>%
+  group_by(subscriptionid)%>%
+  mutate(min_start_date=min(start_date))%>%
+  filter(min_start_date!=start_date)
+
+migration_rows%>%
+  group_by(publicationcode)%>%
+  filter(str_detect(publicationcode,"Print"))
+```
+
+
+```{r}
+ccb_adv_data%>%
+  mutate(is_migrated=ifelse(subscriptionreference%in%migration_rows$adv_sub_id,1,0))%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(termnumber=max(termnumber),
+         rate=sum(rate))%>%
+  mutate(max_is_migrated=max(is_migrated))%>%
+  filter(is_migrated==max_is_migrated)
+  mutate(sub)
+```
+```{r}
+ccb_adv_data%>%
+  filter(subscriptionreference==19759634)
+  filter(shiptocustomernumber==39749420&ordernumber=='D4415612')
+```
+
 
 
 ```{r}
@@ -196,5 +412,4 @@ ccb_list%>%
                                      ifelse(is.na(renewalordernumber)&expire_date<today()&publicationcode=="Premium",225,NA)),na.rm=TRUE),
             total_renewal_revenue_post_price_increase=renewal_price_increase_revenue+renewal_no_price_increase_revenue+churn_loss)
 ```
-
 

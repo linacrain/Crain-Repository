@@ -1,12 +1,37 @@
 with 
 
+reduced_invoice as (
+select 
+	*,
+	case when chargereferences like '%Liability%' then 0
+	  else 1 
+	end as charge_value,
+	case when subscriptioncurrentperiodstartdatetime is null and subscriptioncurrentperiodenddatetime is null then 0 
+	else 1 
+	end as sub_length_value
+from prod.pelcro.invoice 
+where invoicetotal is not null),
+
+max_charge as (
+select 
+	susbcriptionid,
+	max(charge_value) as max_charge,
+	max(sub_length_value) as max_sub_length
+from reduced_invoice 
+group by susbcriptionid),
+
+rolled_up_invoice as (
+select 
+	r.* 
+from reduced_invoice r 
+join max_charge m on m.susbcriptionid=r.susbcriptionid and m.max_charge=r.charge_value and m.max_sub_length=r.sub_length_value),
 
 
 
 
 
 /*CCB Individual Existing Users*/
-ccb_I as (
+ccb_I_t as (
 SELECT distinct
 		substring(s.metadata,position('"crainchicago_' in s.metadata)+14,position('"common_is_future' in s.metadata)-position('"crainchicago_' in s.metadata)) as test,
     substring(test,1,12) as adv_sub_id
@@ -43,15 +68,29 @@ SELECT distinct
 	else i.planid
 	end as planid,
 	i.amountpaid as amountpaid,
-	i.paidatdatetime as orderdate
+	case when i.billingtype like '%charge%' then 'Y'
+		else 'N'
+	end as isautorenew,
+	i.paidatdatetime as orderdate,
+	i.chargereferences,
+	s.iscorporate,
+	s.isagency,
+	s.iscomp,
+	s.isgiftdonor,
+	s.isindividual
 FROM prod.pelcro.subscription s
-left join prod.pelcro.invoice i on i.susbcriptionid = s.subscriptionid
+left join rolled_up_invoice i on i.susbcriptionid = s.subscriptionid
 where s.businessunitcode = 'CCB'
 	and s.ispaid is true
+	and s.isindividual is true
+	and s.issourced is true
 order by currentperiodenddatetime
-)
+),
 
-select adv_sub_id,
+ccb_i as (
+
+select case when adv_sub_id='' then NULL::numeric
+       else adv_sub_id::numeric end as adv_sub_id,
 adv_order_number,
 subscriptionid,
 ordernumber,
@@ -64,14 +103,20 @@ start_date,
 expire_date,
 rate,
 amountpaid,
+c.isautorenew,
 orderdate,
 case when ps.planinterval like '%year%' then 'Annual'
 		 when ps.planinterval like '%month%' then 'Monthly'
 		 when ps.planinterval is null and isannualterm=true then 'Annual'
 		 when ps.planinterval is null and ismonthlyterm=true then 'Monthly'
 	else 'day' end as termlength,
-case when ps.isautorenew is null then 'N'
-		else 'Y'
-	end as isautorenew
-from ccb_i c
-left join prod.pelcro.subscription_plan ps on ps.planid=c.planid
+c.chargereferences,
+c.iscorporate,
+	c.isindividual,
+	c.isagency,
+	c.iscomp,
+	c.isgiftdonor
+from ccb_i_t c
+left join prod.pelcro.subscription_plan ps on ps.planid=c.planid)
+
+select * from ccb_i

@@ -1,4 +1,0 @@
-"0","cdb_t<-dbGetQuery(prod,statement=read_file('cdb_query.sql'))
-"
-"2","Error: Failed to prepare query : ERROR:  relation ""ndiu"" does not exist
-"

@@ -3,25 +3,25 @@
     "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/ccb_autorenew_investigatin.sql",
     "project_path": "ccb_autorenew_investigatin.sql",
     "type": "sql",
-    "hash": "0",
+    "hash": "1324879225",
     "contents": "",
     "dirty": false,
     "created": 1718733199551.0,
     "source_on_save": true,
-    "relative_order": 12,
+    "relative_order": 15,
     "properties": {
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "48,32",
-        "scrollLine": "27"
+        "cursorPosition": "121,19",
+        "scrollLine": "85"
     },
     "folds": "",
-    "lastKnownWriteTime": 1718733212,
+    "lastKnownWriteTime": 1718980469,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1718733212078,
+    "last_content_update": 1718980469012,
     "read_only": false,
     "read_only_alternatives": []
 }

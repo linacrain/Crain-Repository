@@ -1,0 +1,42 @@
+"0","missing_adv_data_ccb<-ccb_adv_data%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate>=as.Date(""2016-01-01"",format=""%Y-%m-%d""))%>%
+  filter(!subscriptionreference%in%ccb_data$subscriptionreference)%>%
+  left_join(ccb_data,by=c(""shiptocustomernumber""=""original_adv_cust_value"",""ordernumber""=""ordernumber""))%>%
+  filter(is.na(shiptocustomernumber.y))%>%
+  distinct()%>%
+  mutate(original_adv_cust_value=as.double(shiptocustomernumber),
+         shiptocustomernumber=as.character(shiptocustomernumber),
+         pelcro_subid=NA,
+         brand='CCB',
+         pubcode=publicationcode,
+         adv_subid=subscriptionreference,
+         startissuedate=as.character(startissuedate.x),
+         expirationissuedate=as.character(expirationissuedate.x),
+         ordernumber=as.character(ordernumber),
+         renewalordernumber=renewalordernumber.x,
+         rate=rate.x,
+         termlength=termlength.x,
+         isautorenew=isautorenew.x,
+         renewalstartdate=as.character(renewalstartdate.x),
+         renewalrate=as.character(renewalrate.x),
+         orderdate=as.character(orderdate.x),
+         termnumber=termnumber.x,
+         donortype=donortype.x
+         )%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `filter()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `!subscriptionreference %in% ccb_data$subscriptionreference`.[39m
+Caused by warning:
+[33m![39m Unknown or uninitialised column: `subscriptionreference`.
+"
+"2","Warning in left_join(., ccb_data, by = c(shiptocustomernumber = ""original_adv_cust_value"",  :"
+"2","
+ "
+"2"," [38;5;232mDetected an unexpected many-to-many relationship between `x` and `y`.
+[36mℹ[38;5;232m Row 419981 of `x` matches multiple rows in `y`.
+[36mℹ[38;5;232m Row 31937 of `y` matches multiple rows in `x`.
+[36mℹ[38;5;232m If a many-to-many relationship is expected, set `relationship = ""many-to-many""` to silence this warning.[39m
+"
