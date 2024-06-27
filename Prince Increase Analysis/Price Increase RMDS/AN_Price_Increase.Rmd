@@ -79,7 +79,7 @@ an_query%>%
             renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
   ungroup()%>%
   group_by(pubcode,isautorenew)%>%
-  filter(rate<=199)%>%
+  filter(rate==199)%>%
   summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
             n_distinct_renewals_pi=n_distinct(ifelse((renewalordernumber>0&pubcode=="Basic Digital"&renewalrate>=249)|(renewalordernumber>0&pubcode=="Premium"&renewalrate>=299)|renewalordernumber>0&renewalrate>=rate,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
             n_distinct_undetermined=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
@@ -92,9 +92,6 @@ an_query%>%
             churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<=today()&pubcode=="Basic Digital",249,
                                      ifelse(renewalordernumber==0&expirationissuedate<=today()&pubcode=="Premium",299,NA)),na.rm=TRUE),
             total_renewal_revenue_post_price_increase=renewal_revenue_pi+churn_loss)
-            
-            
-            
 ```
 
 
@@ -162,7 +159,7 @@ an_query%>%
 pre_table<-an_query%>%
   filter(donortype=="I")%>%
   filter(orderdate<as.Date("12-15-2023",format="%m-%d-%Y"))%>%
-  filter(orderdate>as.Date("05-01-2023",format='%m-%d-%Y'))%>%
+  filter(orderdate>=as.Date("05-01-2023",format='%m-%d-%Y'))%>%
   filter(pubcode=="Basic Digital"|pubcode=="Premium")%>%
   mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
   mutate(termnumber=as.numeric(termnumber))%>%
@@ -241,14 +238,25 @@ premium_annual_beta_binomial <- brm(
   refresh = 0
 )
 
+saveRDS(prem)
+
 
 premium_annual_beta_binomial
 ```
+```{r}
+plot(premium_annual_beta_binomial)
+```
+```{r}
+pp_check(premium_annual_beta_binomial,ndraws=50)
+```
+
+
+
 ```{r,message=FALSE,error=FALSE,}
 premium_annual_beta_binomial%>% 
   tidybayes::epred_draws(newdata = premium_annual)%>%
   mutate(.epred_prop = .epred / total_contracts) %>% 
-  ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x="Proportion of Users who subscribe at Premium Annual",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
+  ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x="Proportion of New Users who subscribe at Premium Annual",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
 ```
 ```{r}
 premium_annual_beta_binomial%>% 
@@ -262,7 +270,7 @@ premium_annual_beta_binomial%>%
   stat_halfeye() +
   scale_x_continuous(labels = label_percent(), expand = c(0, 0.015)) +
   guides(fill = "none") +
-  labs(x = "Percentage Point Diff in Proportions",
+  labs(x = "Percentage Point Diff in Proportions (Premium Annual)",
        y = NULL) +
   theme_minimal()
 ```
@@ -271,7 +279,6 @@ premium_annual_beta_binomial%>%
 basic_digital_annual<-full_table%>%
   filter(pubcode=="Basic Digital"&termlength=="Annual")
 
-basic_digital_annual
 
 
 basic_digital_beta_binomial <- brm(
@@ -285,13 +292,30 @@ basic_digital_beta_binomial <- brm(
 
 basic_digital_beta_binomial
 ```
-
-
-
+```{r}
+plot(basic_digital_beta_binomial)
+```
 
 ```{r}
+pp_check(basic_digital_beta_binomial,ndraws=100)
+```
+
+```{r}
+basic_digital_beta_binomial_table_for_gg<-basic_digital_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = basic_digital_annual)
+
+write.csv(basic_digital_beta_binomial_table_for_gg,"basic_digital_beta_binomial_table_for_gg.csv",row.names = FALSE)
+
+t<-read.csv("basic_digital_beta_binomial_table_for_gg.csv")
+
+
 basic_digital_beta_binomial%>% 
   tidybayes::epred_draws(newdata = basic_digital_annual)%>%
+  mutate(.epred_prop = .epred / total_contracts) %>% 
+  ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x="Proportion of New Users who subscribe at Basic Digital Annual",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
+
+
+t%>%
   mutate(.epred_prop = .epred / total_contracts) %>% 
   ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x="Proportion of New Users who subscribe at Basic Digital Annual",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
 ```
@@ -308,9 +332,69 @@ basic_digital_beta_binomial%>%
   stat_halfeye() +
   scale_x_continuous(labels = label_percent(), expand = c(0, 0.015)) +
   guides(fill = "none") +
+  labs(x = "Percentage Point Diff in Proportions (Basic Digital Annual)",
+       y = NULL) +
+  theme_minimal()
+```
+
+```{r}
+sub_page_conv_rate<-an_price_increase_adobe%>%
+  mutate(category=ifelse(date<as.Date('12/15/2023',format="%m/%d/%Y"),"pre_2nd_price_increase","post_2nd_price_increase"))%>%
+  group_by(category)%>%
+  summarise(total_unique_visitors=sum(unique_visitors),
+            total_paid_orders=sum(new_paid_orders))%>%
+  mutate(subscription_landing_page_conv_rate=total_paid_orders/total_unique_visitors)
+
+sub_page_conv_rate
+```
+```{r}
+sub_page_conv_rate_beta_binomial <- brm(
+  bf(total_paid_orders | trials(total_unique_visitors) ~ 0 + category),
+  data = sub_page_conv_rate,
+  family = binomial(link = "identity"),
+  prior = c(prior(beta(1, 1), class = "b", dpar = "mu", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+
+sub_page_conv_rate_beta_binomial
+```
+
+```{r}
+plot(sub_page_conv_rate_beta_binomial)
+```
+
+```{r}
+pp_check(sub_page_conv_rate_beta_binomial,ndraw=100)
+```
+
+```{r}
+sub_page_conv_rate_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = sub_page_conv_rate)%>%
+  mutate(.epred_prop = .epred / total_unique_visitors) %>% 
+  ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x="Proportion of Visitors who convert during a visit with Sub Page",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
+```
+
+```{r}
+sub_page_conv_rate_beta_binomial%>% 
+  epred_draws(newdata = sub_page_conv_rate) %>% 
+  mutate(.epred_prop = .epred / total_unique_visitors) %>% 
+  ungroup() %>% 
+  mutate(category = fct_relevel(category))%>%
+  compare_levels(.epred_prop, by = category,
+                 comparison = "pairwise")%>%
+  ggplot(aes(x = .epred_prop)) +
+  stat_halfeye() +
+  scale_x_continuous(labels = label_percent(), expand = c(0, 0.015)) +
+  guides(fill = "none") +
   labs(x = "Percentage Point Diff in Proportions",
        y = NULL) +
   theme_minimal()
 ```
+
+```{r}
+```
+
+
 
 

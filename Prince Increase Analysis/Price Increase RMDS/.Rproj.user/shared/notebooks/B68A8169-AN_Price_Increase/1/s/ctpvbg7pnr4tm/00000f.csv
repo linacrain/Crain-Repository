@@ -1,7 +1,7 @@
 "0","pre_table<-an_query%>%
   filter(donortype==""I"")%>%
   filter(orderdate<as.Date(""12-15-2023"",format=""%m-%d-%Y""))%>%
-  filter(orderdate>as.Date(""05-01-2023"",format='%m-%d-%Y'))%>%
+  filter(orderdate>=as.Date(""05-01-2023"",format='%m-%d-%Y'))%>%
   filter(pubcode==""Basic Digital""|pubcode==""Premium"")%>%
   mutate(pubcode=ifelse(pubcode==""AN3"",""Digital All Access"",pubcode))%>%
   mutate(termnumber=as.numeric(termnumber))%>%

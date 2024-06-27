@@ -245,6 +245,8 @@ sub_page_conv_rate
 ```{r,echo=FALSE,message=FALSE,warning=FALSE}
 sub_page_conv_rate_beta_binomial<-readRDS('sub_page_conv_rate_beta_binomial.rds')
 
+sub_page_conv_rate_beta_binomial
+
 sub_page_conv_rate_beta_binomial%>% 
   tidybayes::epred_draws(newdata = sub_page_conv_rate)%>%
   mutate(.epred_prop = .epred / total_unique_visitors) %>% 
