@@ -1,0 +1,18 @@
+"0","p_rows<-pelcro_rows%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  left_join(migration_termnumber,by=c(""subscriptionid""=""pelcro_subid""))%>%
+  mutate(row_number=row_number())%>%
+  mutate(termnumber=ifelse(is.na(m),0,m)+row_number)%>%
+  mutate(shiptocustomernumber=customeraccountid,
+         pelcro_subid=subscriptionid,
+         renewalordernumber=as.character(renewalordernumber),
+         pubcode=publicationcode,
+         adv_subid=adv_sub_id,
+         startissuedate=start_date,
+         expirationissuedate=expire_date
+         )%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+"
+"1","[38;5;232mAdding missing grouping variables: `subscriptionid`[39m
+"

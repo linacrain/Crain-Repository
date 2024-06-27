@@ -1,0 +1,5 @@
+"0","  filter(n>1)
+"
+"2","Error in n > 1 : 
+  comparison (>) is possible only for atomic and list types
+"

@@ -1,0 +1,8 @@
+"0","  summarise(n_distinct_active_contracts=n_distinct(paste(shiptocustomernumber,ordernumber)),
+            n_renewals=n_distinct(ifelse(did_renew==TRUE,paste(shiptocustomernumber,ordernumber),NA),na.rm=TRUE),
+            mean_rate=mean(rate,na.rm=TRUE),
+            mean_renewal_rate=mean(renewalrate,na.rm=TRUE),
+            mean_termnumber=mean(termnumber))
+"
+"2","Error: object 'shiptocustomernumber' not found
+"

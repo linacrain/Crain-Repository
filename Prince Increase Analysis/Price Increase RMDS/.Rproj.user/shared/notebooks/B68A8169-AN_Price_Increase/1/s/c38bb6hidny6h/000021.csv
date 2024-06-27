@@ -1,0 +1,17 @@
+"0","an_adv_data%>%
+  distinct()%>%
+  filter(!subscriptionreference%in%an_p_data$adv_subid)%>%
+  filter(expirationissuedate>=as.Date(""2023-12-15"",format=""%Y-%m-%d""))%>%
+  filter(startissuedate<=as.Date(""2023-12-15"",format=""%Y-%m-%d""))%>%
+  left_join(an_p_data,by=c(""shiptocustomernumber""=""original_adv_cust_value"",""ordernumber""=""ordernumber""))%>%
+  filter(is.na(brand))%>%
+  filter(ispaid==TRUE)
+"
+"1","[1m[33mError[39m in `filter()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `!subscriptionreference %in% an_p_data$adv_subid`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'an_p_data' not found
+Backtrace:
+[90m  1. [39m... %>% filter(ispaid == TRUE)
+[90m 14. [39msubscriptionreference %in% an_p_data$adv_subid
+"

@@ -1,0 +1,40 @@
+"0","an_adv_data%>%
+  distinct()%>%
+  filter(donortype==""I"")%>%
+  filter(!subscriptionreference%in%an_p_data$adv_subid)%>%
+  filter(expirationissuedate>=as.Date(""2023-05-01"",format=""%Y-%m-%d""))%>%
+  filter(startissuedate<=as.Date(""2023-05-01"",format=""%Y-%m-%d""))%>%
+  group_by(shiptocustomernumber,ordernumber,subscriptionreference,termlength,startissuedate,expirationissuedate)%>%
+  mutate(pub_level=ifelse(publicationcode==""AN2"",1,
+                          ifelse(publicationcode==""AN3"",3,
+                                 ifelse(publicationcode==""AN4"",4,2))))%>%
+  mutate(mpub_level=max(pub_level))%>%
+  mutate(total_rate=sum(rate),
+         term_number=max(termnumber))%>%
+  mutate(renewal_value=ifelse(is.na(renewalordernumber),NA,1))%>%
+  summarise(pub_level=max(pub_level,na.rm=TRUE),
+            rate=sum(rate,na.rm=TRUE),
+            termnumber=max(termnumber,na.rm=TRUE),
+            did_renew=ifelse(max(renewal_value,na.rm=TRUE)==1,TRUE,FALSE),
+            renewalrate=sum(renewalrate,na.rm=TRUE),
+            renewaltermlength=max(renewaltermlength,na.rm=TRUE))%>%
+  mutate(pubcode=ifelse(pub_level==4,""AN4"",
+                        ifelse(pub_level==3,""AN3"",
+                               ifelse(pub_level==2,""AN1"",""AN2""))))%>%
+  ungroup()%>%
+  group_by(pubcode)%>%
+  mutate(renewalrate=ifelse(renewalrate==0&did_renew==FALSE,NA,renewalrate))
+"
+"2","Warning:"
+"2"," [38;5;232mThere were 1170 warnings in `summarise()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `did_renew = ifelse(max(renewal_value, na.rm = TRUE) == 1, TRUE, FALSE)`.
+[36mℹ[38;5;232m In group 3: `shiptocustomernumber = 3991897`, `ordernumber = ""D4758803""`, `subscriptionreference =
+  23535659`, `termlength = ""Annual""`, `startissuedate = 2023-01-16`, `expirationissuedate = 2024-01-08`.[39m
+Caused by warning in `max()`:
+[33m![39m no non-missing arguments to max; returning -Inf
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 1169 remaining warnings.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'subscriptionreference',
+'termlength', 'startissuedate'. You can override using the `.groups` argument.[39m
+"

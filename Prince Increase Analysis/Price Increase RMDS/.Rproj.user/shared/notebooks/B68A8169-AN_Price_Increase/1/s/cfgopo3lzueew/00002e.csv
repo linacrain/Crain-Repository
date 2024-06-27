@@ -1,0 +1,6 @@
+"0","test<-dbGetQuery(prod, statement = read_file('an_working_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  syntax error at end of input
+LINE 432: 
+          ^
+"

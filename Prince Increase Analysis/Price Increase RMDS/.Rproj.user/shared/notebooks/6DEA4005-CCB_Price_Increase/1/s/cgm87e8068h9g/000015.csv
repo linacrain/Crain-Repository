@@ -1,0 +1,17 @@
+"0","ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference""))
+"
+"2","Warning in left_join(., last_term, by = c(adv_sub_id = ""subscriptionreference"")) :"
+"2","
+ "
+"2"," [38;5;232mDetected an unexpected many-to-many relationship between `x` and `y`.
+[36mℹ[38;5;232m Row 6060 of `x` matches multiple rows in `y`.
+[36mℹ[38;5;232m Row 35468 of `y` matches multiple rows in `x`.
+[36mℹ[38;5;232m If a many-to-many relationship is expected, set `relationship = ""many-to-many""` to silence this warning.[39m
+"

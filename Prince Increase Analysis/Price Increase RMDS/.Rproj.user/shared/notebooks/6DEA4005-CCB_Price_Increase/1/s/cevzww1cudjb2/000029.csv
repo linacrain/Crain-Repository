@@ -1,0 +1,8 @@
+"0","reduced%>%
+  left_join(migration_rows,by=c('subscriptionreference'='adv_sub_id','ordernumber'='adv_order_number'))%>%
+  filter(!is.na(rate.y))%>%
+  select(subscriptionreference,ordernumber,termnumber,orderdate.x,startissuedate,rate.x,expirationissuedate,termlength.x,renewalpolicy,renewaltermnumber,publicationcode.y,start_date,expire_date,rate.y)%>%
+  distinct()
+"
+"1","[38;5;232mAdding missing grouping variables: `shiptocustomernumber`[39m
+"

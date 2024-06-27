@@ -1,0 +1,37 @@
+"0","ccb_list<-ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference"",""adv_order_number""=""ordernumber""))%>%
+  separate(start_date,into=c(""start_date"",""start_time""),sep="" "")%>%
+  separate(orderdate,into=c(""order_date"",""order_time""),sep="" "")%>%
+  separate(expire_date,into=c(""expire_date"",""expire_time""),sep="" "")%>%
+  mutate(order_date=ifelse(is.na(order_date),start_date,order_date))%>%
+  mutate(order_date=as.Date(order_date,format=""%Y-%m-%d""))%>%
+  mutate(start_date=as.Date(start_date,format=""%Y-%m-%d""))%>%
+  mutate(expire_date=as.Date(expire_date,format=""%Y-%m-%d""))%>%
+  mutate(termnumber=row_number()-1)%>%
+  mutate(termnumber=ifelse(f==start_date,m,termnumber+m))%>%
+  select(subscriptionid,ordernumber,customeraccountid,termnumber,termlength,isautorenew,totalprice,publicationcode,donortype,start_date,expire_date,rate,order_date)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(ordernumber=ifelse(is.na(ordernumber),paste(subscriptionid,termnumber),ordernumber))%>%
+  mutate(termnumber=ifelse(is.na(termnumber),row_number(),termnumber))%>%
+  mutate(renewaltermnumber=lead(termnumber,order_by=c(start_date)),
+         renewalrate=lead(rate,order_by=c(start_date)),
+         renewalpublicationcode=lead(publicationcode,order_by=c(start_date)),
+         renewalorderdate=lead(order_date,order_by=c(start_date)),
+         renewalstartdate=lead(start_date,order_by=c(start_date)),
+         renewaltermlength=lead(termlength,order_by=c(start_date)),
+         renewalordernumber=lead(ordernumber,order_by=start_date))
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 357669 rows [15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...].[39m
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 367647 rows [15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+25, 26, 27, 28, 29, 30, 31, 32, 33, 34, ...].[39m
+"

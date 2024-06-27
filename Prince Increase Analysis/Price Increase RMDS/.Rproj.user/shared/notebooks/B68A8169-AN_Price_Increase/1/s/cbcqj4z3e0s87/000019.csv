@@ -1,0 +1,16 @@
+"0","an_query%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate>=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(pubcode==""Basic Digital""|pubcode==""Premium"")%>%
+  filter(termnumber==1)%>%
+  filter(expirationissuedate<=today()|(expirationissuedate>=today()&!is.na(renewalordernumber)))%>%
+  mutate(pubcode=ifelse(pubcode==""AN3"",""Digital All Access"",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength'. You can override using the `.groups` argument.[39m
+"

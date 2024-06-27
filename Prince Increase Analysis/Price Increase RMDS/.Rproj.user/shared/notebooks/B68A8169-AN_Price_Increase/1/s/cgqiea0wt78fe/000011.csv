@@ -1,0 +1,9 @@
+"0","plot(premium_annual_beta_binomial)
+"
+"2","Warning in gzfile(file, ""wb"") :"
+"2","
+ "
+"2"," cannot open compressed file 'C:/Users/andrew.lin/OneDrive - Crain Communications/Documents/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/.Rproj.user/shared/notebooks/B68A8169-AN_Price_Increase/1/2C6A0F8421e6817f/cgqiea0wt78fe_t/a452f77e0ee945a8a11062b6699df168.snapshot', probable reason 'No such file or directory'
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

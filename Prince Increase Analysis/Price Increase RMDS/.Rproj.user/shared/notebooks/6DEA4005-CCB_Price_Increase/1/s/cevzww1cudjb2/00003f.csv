@@ -1,0 +1,29 @@
+"0","migration_rows<-reduced%>%
+  left_join(migration_rows,by=c('subscriptionreference'='adv_sub_id','ordernumber'='adv_order_number'))%>%
+  filter(!is.na(rate.y))%>%
+  mutate(original_adv_cust_value=shiptocustomernumber,
+         pubcode=publicationcode.y,
+         termlength=termlength.x,
+         rate=rate.x,
+         orderdate=orderdate.x,
+         brand='CCB',
+         adv_subid=subscriptionreference,
+         pelcro_subid=subscriptionid,
+         isautorenew.x=isautorenew,
+         donortype.x=donortype
+         )%>%
+   select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+"
+"1","[1m[33mError[39m in `mutate()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `isautorenew.x = isautorenew`.
+[36mℹ[38;5;232m In group 1: `shiptocustomernumber = 645632` and `ordernumber = ""D4824270""`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'isautorenew' not found
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 4. [39m[1m[94mdplyr:::mutate.data.frame([39m[22m...[1m[94m)[39m[22m
+[90m 5. [39mdplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+[90m 7. [39mdplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+[90m 8. [39mmask$eval_all_mutate(quo)
+[90m 9. [39m[1mdplyr[22m (local) eval()
+"

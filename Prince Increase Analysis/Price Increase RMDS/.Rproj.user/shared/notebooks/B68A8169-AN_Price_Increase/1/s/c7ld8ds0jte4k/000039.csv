@@ -1,0 +1,12 @@
+"0","  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals=n_distinct(ifelse(renewalordernumber>0,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_rate_renewal_price_increase=median(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            median_rate_churn_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_tenure_renewal=median(ifelse(renewalordernumber>0,termnumber,NA),na.rm=TRUE),
+            median_tenure_churn=median(ifelse(renewalordernumber>0,NA,termnumber),na.rm=TRUE)
+            )
+"
+"2","Error: object 'shiptocustomernumber' not found
+"

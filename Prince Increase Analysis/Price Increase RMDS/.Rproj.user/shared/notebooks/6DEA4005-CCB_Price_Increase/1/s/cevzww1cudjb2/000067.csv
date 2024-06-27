@@ -1,0 +1,22 @@
+"0","p_rows<-pelcro_rows%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  left_join(migration_termnumber,by=c(""subscriptionid""=""pelcro_subid""))%>%
+  mutate(row_number=row_number())%>%
+  mutate(termnumber=ifelse(is.na(m),0,m)+row_number)%>%
+  mutate(shiptocustomernumber=customeraccountid,
+         pelcro_subid=subscriptionid,
+         renewalordernumber=as.character(renewalordernumber),
+         pubcode=publicationcode,
+         adv_subid=adv_sub_id,
+         startissuedate=start_date
+         )%>%
+  select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+"
+"1","[1m[33mError[39m in `select()`:[22m
+[33m![39m Can't subset columns that don't exist.
+[31m✖[39m Column `expirationissuedate` doesn't exist.
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 3. [39m[1m[94mdplyr:::select.data.frame([39m[22m...[1m[94m)[39m[22m
+"

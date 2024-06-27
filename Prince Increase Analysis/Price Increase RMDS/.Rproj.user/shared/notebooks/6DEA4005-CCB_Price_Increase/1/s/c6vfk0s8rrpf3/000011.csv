@@ -1,0 +1,18 @@
+"0","ccb_list%>%
+  filter(isautorenew==""N"")%>%
+  arrange(desc(expire_dat))
+"
+"1","[1m[33mError[39m in `arrange()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `..1 = expire_dat`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'expire_dat' not found
+Backtrace:
+[90m  1. [39mccb_list %>% filter(isautorenew == ""N"") %>% ...
+[90m  3. [39m[1m[94mdplyr:::arrange.data.frame([39m[22m., desc(expire_dat)[1m[94m)[39m[22m
+[90m  4. [39mdplyr:::arrange_rows(.data, dots = dots, locale = .locale)
+[90m  6. [39mdplyr:::mutate.data.frame(data, `:=`(""{name}"", !!dot), .keep = ""none"")
+[90m  7. [39mdplyr:::mutate_cols(.data, dplyr_quosures(...), by)
+[90m  9. [39mdplyr:::mutate_col(dots[[i]], data, mask, new_columns)
+[90m 10. [39mmask$eval_all_mutate(quo)
+[90m 11. [39m[1mdplyr[22m (local) eval()
+"

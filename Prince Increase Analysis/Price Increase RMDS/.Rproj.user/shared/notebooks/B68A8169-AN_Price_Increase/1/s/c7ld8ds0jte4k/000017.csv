@@ -1,0 +1,7 @@
+"0","  group_by(pubcode)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber)),
+            n_distinct_renewals=n_distinct(ifelse(!is.na(renewalordernumber),paste(shiptocustomernumber,ordernumber),NA),na.rm=TRUE)
+            )
+"
+"2","Error: object 'pubcode' not found
+"

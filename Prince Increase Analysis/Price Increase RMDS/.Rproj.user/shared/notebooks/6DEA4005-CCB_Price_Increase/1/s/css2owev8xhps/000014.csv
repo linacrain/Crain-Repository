@@ -1,0 +1,8 @@
+"0","ccb_adv_data%>%
+  filter(subscriptionreference%in%list_of_migrated_adv_accounts$adv_sub_id&ordernumber%in%list_of_migrated_adv_accounts$adv_order_number)%>%
+  group_by(subscriptionreference,ordernumber)%>%
+  summarise(m=max(termnumber),
+            f=max(expirationissuedate))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'subscriptionreference'. You can override using the `.groups` argument.[39m
+"

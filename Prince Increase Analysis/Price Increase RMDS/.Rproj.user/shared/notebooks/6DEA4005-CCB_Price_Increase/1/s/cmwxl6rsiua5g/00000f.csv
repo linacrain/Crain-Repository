@@ -1,0 +1,49 @@
+"0","ccb_list<-ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference"",""adv_order_number""=""ordernumber""))%>%
+  separate(start_date,into=c(""start_date"",""start_time""),sep="" "")%>%
+  separate(orderdate,into=c(""order_date"",""order_time""),sep="" "")%>%
+  separate(expire_date,into=c(""expire_date"",""expire_time""),sep="" "")%>%
+  mutate(order_date=ifelse(is.na(order_date),start_date,order_date))%>%
+  mutate(order_date=as.Date(order_date,format=""%Y-%m-%d""))%>%
+  mutate(start_date=as.Date(start_date,format=""%Y-%m-%d""))%>%
+  mutate(expire_date=as.Date(expire_date,format=""%Y-%m-%d""))%>%
+  mutate(termnumber=row_number()-1)%>%
+  mutate(termnumber=ifelse(f==start_date,m,termnumber+m))%>%
+  select(subscriptionid,ordernumber,customeraccountid,termnumber,termlength,isautorenew,totalprice,publicationcode,donortype,start_date,expire_date,rate,order_date)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(ordernumber=ifelse(is.na(ordernumber),paste(subscriptionid,termnumber),ordernumber))%>%
+  mutate(termnumber=ifelse(is.na(termnumber),row_number(),termnumber))%>%
+  mutate(renewaltermnumber=lead(termnumber,order_by=c(start_date)),
+         renewalrate=lead(rate,order_by=c(start_date)),
+         renewalpublicationcode=lead(publicationcode,order_by=c(start_date)),
+         renewalorderdate=lead(order_date,order_by=c(start_date)),
+         renewalstartdate=lead(start_date,order_by=c(start_date)),
+         renewaltermlength=lead(termlength,order_by=c(start_date)),
+         renewalordernumber=lead(ordernumber,order_by=start_date))
+"
+"2","Warning:"
+"2"," [38;5;232mUsing an external vector in selections was deprecated in tidyselect 1.1.0.
+[36mℹ[38;5;232m Please use `all_of()` or `any_of()` instead.
+  # Was:
+  data %>% select(test)
+
+  # Now:
+  data %>% select(all_of(test))
+
+See <https://tidyselect.r-lib.org/reference/faq-external-vector.html>.
+[90mThis warning is displayed once every 8 hours.[38;5;232m
+[90mCall `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.[38;5;232m[39m
+"
+"1","[1m[33mError[39m in `select()`:[22m
+[33m![39m Can't subset columns with `test`.
+[31m✖[39m `test` must be numeric or character, not a <data.frame> object.
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m 36. [39m[1mrlang[22m::cnd_signal(x)
+"

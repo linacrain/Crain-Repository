@@ -1,0 +1,40 @@
+"0","mh_adv_data%>%
+  filter(donortype==""I"")%>%
+  filter(expirationissuedate>=as.Date(""05/15/2023"",format=""%m/%d/%Y""))%>%
+  filter(orderdate<as.Date(""05/15/2023"",format=""%m/%d/%Y""))%>%
+  distinct()%>%
+  filter(og_termlength==4|og_termlength==52)%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(publevel=ifelse(publicationcode==""MHZ"",1,
+                             ifelse(publicationcode==""MH"",2,3)),
+         max_publevel=max(publevel))%>%
+  mutate(did_renew=ifelse(is.na(renewalrate),0,1))%>%
+  ungroup()%>%
+  group_by(shiptocustomernumber,ordernumber,termlength,isautorenew,expirationissuedate)%>%
+  summarise(rate=sum(rate,na.rm=TRUE),
+            termnumber=max(termnumber),
+            did_renew=max(did_renew),
+            renewalrate=sum(renewalrate),
+            renewaltermlength=max(renewaltermlength),
+            max_publevel=max(publevel)
+            )%>%
+  mutate(publicationcode=ifelse(max_publevel==1,""MHZ"",
+                                ifelse(max_publevel==2,""MH"",""MHP"")))%>%
+  group_by(publicationcode,termlength)%>%
+  mutate(id=paste(shiptocustomernumber,ordernumber))%>%
+  summarise(active_users_at_price_increase=n_distinct(id),
+            renewals_after_price_increase=n_distinct(ifelse(renewalrate>rate&expirationissuedate<today()&!is.na(did_renew),id,NA),na.rm=TRUE),
+            renewals_no_pi=n_distinct(ifelse(renewalrate<=rate&expirationissuedate<today()&!is.na(did_renew),id,NA),na.rm=TRUE),
+            avg_rate_before_price_increase=mean(rate),
+            avg_rate_after_price_increase=mean(ifelse(!is.na(renewalrate)&renewalrate>rate,renewalrate,NA),na.rm=TRUE),
+            avg_term_for_renewal_pi=mean(ifelse(!is.na(renewalrate)&renewalrate>rate,termnumber,NA),na.rm=TRUE),
+            avg_term_for_cancels=mean(ifelse(is.na(renewalrate),termnumber,NA),na.rm=TRUE),
+            total_renewal_revenue=sum(ifelse(!is.na(renewalrate)&renewalrate>rate,renewalrate,NA),na.rm=TRUE),
+            total_cancel_loss=-1*(sum(ifelse(is.na(renewalrate),rate,NA),na.rm=TRUE))
+            )
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'termlength', 'isautorenew'. You can
+override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'publicationcode'. You can override using the `.groups` argument.[39m
+"

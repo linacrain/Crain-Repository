@@ -1,0 +1,5 @@
+"0","an_query<-dbGetQuery(prod, statement = read_file('AN_Individual_query.sql'))
+"
+"2","Error in (function (classes, fdef, mtable)  : 
+  unable to find an inherited method for function ‘dbGetQuery’ for signature ‘""function"", ""character""’
+"

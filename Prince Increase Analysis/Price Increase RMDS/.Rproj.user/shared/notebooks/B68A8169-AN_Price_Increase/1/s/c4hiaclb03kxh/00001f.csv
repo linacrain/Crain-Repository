@@ -1,4 +1,0 @@
-"0","an_query<-dbGetQuery(prod, statement = read_file('AN_Individual_query.sql'))
-"
-"2","Error: Failed to prepare query : ERROR:  each UNION query must have the same number of columns
-"

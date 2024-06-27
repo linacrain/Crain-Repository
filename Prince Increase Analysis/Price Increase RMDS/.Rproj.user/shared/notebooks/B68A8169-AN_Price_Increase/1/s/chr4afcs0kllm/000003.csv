@@ -1,0 +1,12 @@
+"0","sub_page_conv_rate_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = sub_page_conv_rate)%>%
+  mutate(.epred_prop = .epred / total_unique_visitors) %>% 
+  ggplot(aes(x = .epred_prop, y = category, fill = category))+stat_halfeye()+theme_minimal()+labs(x=""Proportion of Visitors who convert during a visit with Sub Page"",y=NULL)+guides(fill=""none"")+scale_x_continuous(labels = label_percent())
+"
+"2","Warning in gzfile(file, ""wb"") :"
+"2","
+ "
+"2"," cannot open compressed file 'C:/Users/andrew.lin/OneDrive - Crain Communications/Documents/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/.Rproj.user/shared/notebooks/B68A8169-AN_Price_Increase/1/2C6A0F8421e6817f/chr4afcs0kllm_t/2f8942c807204c3181804eece5e101e0.snapshot', probable reason 'No such file or directory'
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

@@ -1,0 +1,35 @@
+"0","reduced_data<-full_list%>%
+  separate(orderdate,into=c(""orderdate"",""ordertime""),sep="" "")%>%
+  separate(startissuedate,into=c(""startissuedate"",""startissuetime""),sep="" "")%>%
+  separate(expirationissuedate,into=c(""expirationissuedate"",""expirationissuetime""),sep="" "")%>%
+  separate(renewalstartdate,into=c(""renewalstartdate"",""renewalstarttime""),sep="" "")%>%
+  mutate(orderdate=as.Date(orderdate,format=""%Y-%m-%d""),
+         startissuedate=as.Date(startissuedate,format=""%Y-%m-%d""),
+         expirationissuedate=as.Date(expirationissuedate,format=""%Y-%m-%d""),
+         renewalstartdate=as.Date(renewalstartdate,format=""%Y-%m-%d""))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,brand)%>%
+  summarise(orderdate=max(orderdate),
+            startissuedate=max(startissuedate),
+            termnumber=max(termnumber),
+            rate=max(rate),
+            expirationissuedate=max(expirationissuedate),
+            renewalrate=max(renewalrate,na.rm=TRUE),
+            renewalstartdate=max(renewalstartdate,na.rm=TRUE)
+            )
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 6965624 rows [710845, 710846, 710847, 710848, 710849, 710850,
+710851, 710852, 710853, 710854, 710855, 710856, 710857, 710858, 710859, 710860, 710861, 710862, 710863, 710864, ...].[39m
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 7111605 rows [710845, 710846, 710847, 710848, 710849, 710850,
+710851, 710852, 710853, 710854, 710855, 710856, 710857, 710858, 710859, 710860, 710861, 710862, 710863, 710864, ...].[39m
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 7115536 rows [710845, 710846, 710847, 710848, 710849, 710850,
+710851, 710852, 710853, 710854, 710855, 710856, 710857, 710858, 710859, 710860, 710861, 710862, 710863, 710864, ...].[39m
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Missing pieces filled with `NA` in 4759402 rows [710849, 710850, 710852, 710857, 710859, 710866,
+710869, 710876, 710878, 710881, 710884, 710886, 710889, 710900, 710903, 710905, 710906, 710907, 710908, 710911, ...].[39m
+"

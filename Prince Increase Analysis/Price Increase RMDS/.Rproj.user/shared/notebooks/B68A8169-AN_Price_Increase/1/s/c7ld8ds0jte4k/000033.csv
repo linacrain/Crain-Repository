@@ -1,0 +1,24 @@
+"0","an_query%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate<=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(expirationissuedate>=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(expirationissuedate<=today()|(expirationissuedate>=today()&!is.na(renewalordernumber)))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  mutate(pubcode=ifelse(pubcode==""AN3"",""Digital All Access"",pubcode))%>%
+  filter(pubcode==""Basic Digital""|pubcode==""Premium"")%>%
+  group_by(pubcode,termlength)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals=n_distinct(ifelse(renewalordernumber>0,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            mean_rate_canceled_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_rate_renewal_price_increase=median(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            median_rate_canceled_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE)
+            )
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength'. You can override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'pubcode'. You can override using the `.groups` argument.[39m
+"

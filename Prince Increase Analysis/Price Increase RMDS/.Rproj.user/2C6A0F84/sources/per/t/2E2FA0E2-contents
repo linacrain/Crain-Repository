@@ -1,0 +1,258 @@
+---
+title: "AN Price Increase"
+author: "Andrew Lin"
+date: "2024-06-13"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library("readr") 
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+```
+
+
+```{r}
+
+an_adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='ANG'")
+
+pelcro<-dbGetQuery(prod,"select * from prod.pelcro.subscription where businessunitcode='ANG'")
+
+pelcro_invoice<-dbGetQuery(prod,"select * from prod.pelcro.invoice where businessunitcode='ANG'")
+
+an_query<-dbGetQuery(prod, statement = read_file('AN_Individual_query.sql'))
+```
+
+Validation Checking....
+```{r}
+
+an_adv_data%>%
+  filter(shiptocustomernumber==81977265&ordernumber=='D6037561')
+
+an_adv_data%>%
+  distinct()%>%
+  filter(!shiptocustomernumber%in%an_query$original_adv_cust_value|!ordernumber%in%an_query$ordernumber)
+
+pelcro%>%
+  filter(!subscriptionid%in%an_query$pelcro_subid)%>%
+  filter(!str_detect(productname,"Canada"))%>%
+  left_join(pelcro_invoice,by=c("subscriptionid"="susbcriptionid"))%>%
+    filter(ispaid==TRUE)
+
+pelcro_invoice%>%
+  filter(!susbcriptionid%in%an_query$pelcro_subid)%>%
+  filter(!str_detect(currency,'cad'))
+  select(susbcriptionid)
+  filter(susbcriptionid==1942582)
+
+_query%>%
+  filter(subscriptionreference==22946844)
+  
+pelcro%>%
+  filter(subscriptionid==1938644)
+
+an_query%>%
+  filter(pelcro_subid==1938644)
+```
+
+AN Digital Only + Digital and Print (Annual) Renewals
+```{r}
+an_query%>%
+  filter(donortype=="I")%>%
+  filter(expirationissuedate>=as.Date("01-08-2024",format="%m-%d-%Y")&orderdate<=as.Date("12-15-2023",format="%m-%d-%Y"))%>%
+  filter(pubcode=="Basic Digital"|pubcode=="Premium")%>%
+  filter(termlength=="Annual")%>%
+  mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,orderdate,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,isautorenew)%>%
+  filter(rate<=199)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals_pi=n_distinct(ifelse((renewalordernumber>0&pubcode=="Basic Digital"&renewalrate>=249)|(renewalordernumber>0&pubcode=="Premium"&renewalrate>=299)|renewalordernumber>0&renewalrate>=rate,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((renewalordernumber>0&pubcode=="Basic Digital"&renewalrate>=249)|(renewalordernumber>0&pubcode=="Premium"&renewalrate>=299),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),rate,NA),na.rm=TRUE),
+            mean_termnumber_renewal_pi=mean(ifelse((renewalordernumber>0&pubcode=="Basic Digital"&renewalrate>=249)|(renewalordernumber>0&pubcode=="Premium"&renewalrate>=299),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(renewalordernumber==0&expirationissuedate<=today(),termnumber,NA),na.rm=TRUE),
+            renewal_revenue_pi=sum(ifelse((renewalordernumber>0&pubcode=="Basic Digital"&renewalrate>=249)|(renewalordernumber>0&pubcode=="Premium"&renewalrate>=299),as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<=today()&pubcode=="Basic Digital",249,
+                                     ifelse(renewalordernumber==0&expirationissuedate<=today()&pubcode=="Premium",299,NA)),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_revenue_pi+churn_loss)
+            
+            
+            
+```
+
+
+Monthly Digital
+```{r}
+an_query%>%
+  filter(donortype=="I")%>%
+  filter(termlength=="Monthly")%>%
+  filter(orderdate<=as.Date("01/15/2024",format="%m/%d/%Y")&termnumber!=1&expirationissuedate>=as.Date("01/15/2024",format="%m/%d/%Y")|orderdate<=as.Date("12/15/2023",format="%m/%d/%Y")&expirationissuedate>=as.Date("01-15-2024",format="%m-%d-%Y"))%>%
+  filter(pubcode=="Basic Digital")%>%
+  filter(expirationissuedate<=today()|(expirationissuedate>=today()&!is.na(renewalordernumber)))%>%
+  mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,pelcro_subid)%>%
+  mutate(min_order=min(termnumber))%>%
+  filter(termnumber==min_order)%>%
+  filter(rate<=20)%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,termlength,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals_pi=n_distinct(ifelse((renewalordernumber>0&renewalrate>=25)|(renewalordernumber>0&renewalrate>rate),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_pi=n_distinct(ifelse((renewalordernumber>0&renewalrate<=rate),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churn=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse((renewalordernumber>0&renewalrate>=25)|(renewalordernumber>0&renewalrate>rate),rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_rate_renewal_price_increase=median(ifelse((renewalordernumber>0&renewalrate>=25)|(renewalordernumber>0&renewalrate>rate),rate,NA),na.rm=TRUE),
+            median_rate_churn_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            mean_termnumber_renewal=mean(ifelse((renewalordernumber>0&renewalrate>=25)|(renewalordernumber>0&renewalrate>rate),termnumber,NA),na.rm=TRUE),
+            mean_termnumber_churn=mean(ifelse(renewalordernumber>0,NA,termnumber),na.rm=TRUE),
+            renewal_pi_revenue=sum(ifelse((renewalordernumber>0&renewalrate>=25)|(renewalordernumber>0&renewalrate>rate),as.numeric(renewalrate),NA),na.rm=TRUE),
+            churn_loss=-1*sum(ifelse(renewalordernumber==0&expirationissuedate<today(),25,NA),na.rm=TRUE),
+            total_renewal_revenue_post_price_increase=renewal_pi_revenue+churn_loss)
+```
+Initial New Orders 
+```{r}
+an_query%>%
+  filter(donortype=="I")%>%
+  filter(orderdate>=as.Date("12/15/2023",format="%m/%d/%Y")&termnumber==1)%>%
+  filter(pubcode=="Basic Digital"|pubcode=="Premium")%>%
+  mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,startissuedate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,termlength,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals=n_distinct(ifelse(renewalordernumber>0,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_undetermined_contracts=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_rate_renewal_price_increase=median(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            median_rate_churn_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            initial_new_user_revenue=sum(rate))
+```
+
+
+
+
+```{r}
+pre_table<-an_query%>%
+  filter(donortype=="I")%>%
+  filter(orderdate<as.Date("12-15-2023",format="%m-%d-%Y"))%>%
+  filter(orderdate>as.Date("05-01-2023",format='%m-%d-%Y'))%>%
+  filter(pubcode=="Basic Digital"|pubcode=="Premium")%>%
+  mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  filter(termnumber==1)%>%
+  group_by(shiptocustomernumber,ordernumber,orderdate,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,isautorenew)%>%
+  filter(rate==199|rate==20)%>%
+  group_by(pubcode,termlength)%>%
+  summarise(n_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)))%>%
+  ungroup()%>%
+  mutate(total_contracts=sum(n_contracts))%>%
+  mutate(prop=round(n_contracts/total_contracts,2))%>%
+  mutate(category="pre_2nd_price_increase")
+  
+```
+
+```{r}
+post_table<-an_query%>%
+  filter(donortype=="I")%>%
+  filter(orderdate>=as.Date("12/15/2023",format="%m/%d/%Y")&termnumber==1)%>%
+  filter(pubcode=="Basic Digital"|pubcode=="Premium")%>%
+  mutate(pubcode=ifelse(pubcode=="AN3","Digital All Access",pubcode))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,startissuedate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,isautorenew)%>%
+  filter(rate==249|rate==25|rate==299)%>%
+  group_by(pubcode,termlength)%>%
+  summarise(n_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)))%>%
+  ungroup()%>%
+  mutate(total_contracts=sum(n_contracts))%>%
+  mutate(prop=round(n_contracts/total_contracts,2))%>%
+  mutate(category="post_2nd_price_increase")
+```
+
+```{r}
+full_table<-union(pre_table,post_table)
+
+full_table
+
+premium_annual<-full_table%>%
+  filter(pubcode=="Premium"&termlength=="Annual")
+
+premium_annual
+```
+```{r}
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+```
+
+```{r}
+premium_annual_beta_binomial <- brm(
+  bf(n_contracts | trials(total_contracts) ~ 0 + category),
+  data = premium_annual,
+  family = binomial(link = "identity"),
+  prior = c(prior(beta(1, 4.13), class = "b", dpar = "mu", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+
+
+often_comics_model_beta_binomial
+```
+```{r}
+premium_annual_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = premium_annual)
+
+
+expected_values<-as.data.frame(posterior_epred(premium_annual_beta_binomial,premium_annual))
+
+expected_values%>%
+  mutate(difference=V1-V2)%>%
+  mutate()
+```
+
+```{r}
+ggplot() +
+  stat_function(fun = ~dbeta(., 1, 4.13), geom = "area",
+                aes(fill = "Beta(8, 39)"), alpha = 0.5)
+```
+
+
+
+
+
+
