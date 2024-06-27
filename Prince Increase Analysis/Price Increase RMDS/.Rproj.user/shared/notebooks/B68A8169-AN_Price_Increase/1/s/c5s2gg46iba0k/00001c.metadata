@@ -1,0 +1,1 @@
+{"classes":["grouped_df","tbl_df","tbl","data.frame"],"nrow":1,"ncol":17,"summary":{"A tibble":["1 × 17"],"Groups":["shiptocustomernumber, ordernumber, pelcro_subid, adv_subid, isautorenew, pubcode, termnumber, termlength, rate [1]"]}}

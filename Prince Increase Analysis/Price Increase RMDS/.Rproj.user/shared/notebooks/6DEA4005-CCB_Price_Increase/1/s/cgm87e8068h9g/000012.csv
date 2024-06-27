@@ -1,0 +1,16 @@
+"0","ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference"",""ordernumber""=""ordernumber""))
+"
+"1","[1m[33mError[39m in `left_join()`:[22m
+[38;5;232m[33m![38;5;232m Can't join `x$ordernumber` with `y$ordernumber` due to incompatible types.
+[36mℹ[38;5;232m `x$ordernumber` is a <integer64>.
+[36mℹ[38;5;232m `y$ordernumber` is a <character>.[39m
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 3. [39m[1m[94mdplyr:::left_join.data.frame([39m[22m...[1m[94m)[39m[22m
+"

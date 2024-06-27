@@ -1,0 +1,12 @@
+"0","an_p_data%>%
+  filter(donortype==""I"")%>%
+  filter(!str_detect(pubcode,""Canada"")&startissuedate<=as.Date(""05/01/2023"",""%m/%d/%Y""))%>%
+  group_by(termlength,pubcode)%>%
+  summarise(n_potential_renewals=n_distinct(paste(shiptocustomernumber,ordernumber)),
+            n_renewals=n_distinct(ifelse(!is.na(renewalordernumber),paste(shiptocustomernumber,ordernumber),NA),na.rm=TRUE),
+            avg_renewal_rate=mean(rate),
+            mean_rate_for_renewed_users=mean(ifelse(!is.na(renewalordernumber),rate,NA),na.rm=TRUE),
+            mean_rate_for_canceled_users=mean(ifelse(is.na(renewalordernumber),rate,NA),na.rm=TRUE))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'termlength'. You can override using the `.groups` argument.[39m
+"

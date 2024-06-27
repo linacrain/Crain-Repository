@@ -1,0 +1,28 @@
+"0","migrated_rows<-reduced%>%
+  left_join(migration_rows,by=c('subscriptionreference'='adv_sub_id','ordernumber'='adv_order_number'))%>%
+  filter(!is.na(rate.y))%>%
+  mutate(original_adv_cust_value=numeric(shiptocustomernumber),
+         pubcode=publicationcode.y,
+         termlength=termlength.x,
+         rate=rate.x,
+         orderdate=orderdate.x,
+         brand='CCB',
+         adv_subid=subscriptionreference,
+         pelcro_subid=subscriptionid,
+         isautorenew=isautorenew.x,
+         donortype=donortype.y,
+         renewalordernumber=as.character(renewalordernumber.y),
+         renewalrate=renewalrate.y,
+         renewalstartdate=renewalstartdate.y
+         )%>%
+   select(shiptocustomernumber,original_adv_cust_value,ordernumber,orderdate,brand,pubcode,adv_subid,pelcro_subid,termnumber,isautorenew,startissuedate,expirationissuedate,rate,termlength,renewalordernumber,renewalrate,renewalstartdate,donortype)
+"
+"1","[1m[33mError[39m in `mutate()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `original_adv_cust_value = numeric(shiptocustomernumber)`.
+[36mℹ[38;5;232m In group 1: `shiptocustomernumber = 645632` and `ordernumber = ""D4824270""`.[39m
+[1mCaused by error:[22m
+[38;5;232m[33m![38;5;232m `original_adv_cust_value` must be size 1, not 645632.[39m
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m 10. [39m[1mdplyr[22m:::dplyr_internal_error(...)
+"

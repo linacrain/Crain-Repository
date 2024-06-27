@@ -1,0 +1,10 @@
+"0","test%>%
+  order_by(original_adv_cust_value)
+"
+"1","[1m[33mError[39m in `order_by()`:[22m
+[38;5;232m[33m![38;5;232m `call` must be a function call, not a symbol.
+[36mℹ[38;5;232m Did you mean `arrange(., original_adv_cust_value)`?[39m
+Backtrace:
+[90m 1. [39mtest %>% order_by(original_adv_cust_value)
+[90m 2. [39m[1m[94mdplyr::order_by([39m[22m., original_adv_cust_value[1m[94m)[39m[22m
+"

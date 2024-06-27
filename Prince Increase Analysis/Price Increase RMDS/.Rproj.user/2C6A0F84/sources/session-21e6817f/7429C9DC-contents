@@ -1,0 +1,45 @@
+---
+title: "For Jonathan"
+author: "Andrew Lin"
+date: "2024-06-21"
+output: html_document
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+full_list<-full_list_excluding
+full_list_2<-read.csv("full_list_mapped.csv")
+```
+
+```{r}
+reduced_data<-full_list%>%
+  separate(orderdate,into=c("orderdate","ordertime"),sep=" ")%>%
+  separate(startissuedate,into=c("startissuedate","startissuetime"),sep=" ")%>%
+  separate(expirationissuedate,into=c("expirationissuedate","expirationissuetime"),sep=" ")%>%
+  separate(renewalstartdate,into=c("renewalstartdate","renewalstarttime"),sep=" ")%>%
+  mutate(orderdate=as.Date(orderdate,format="%Y-%m-%d"),
+         startissuedate=as.Date(startissuedate,format="%Y-%m-%d"),
+         expirationissuedate=as.Date(expirationissuedate,format="%Y-%m-%d"),
+         renewalstartdate=as.Date(renewalstartdate,format="%Y-%m-%d"))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,brand)%>%
+  summarise(orderdate=max(orderdate),
+            startissuedate=max(startissuedate),
+            termnumber=max(termnumber),
+            rate=max(rate),
+            expirationissuedate=max(expirationissuedate),
+            renewalrate=max(renewalrate,na.rm=TRUE),
+            renewalstartdate=max(renewalstartdate,na.rm=TRUE)
+            )
+
+
+full_list%>%
+  filter(ordernumber=="1631908")
+
+full_list_2%>%
+  filter(is.na(shiptocustomernumber))
+
+
+reduced_data
+```     

@@ -1,0 +1,10 @@
+"0","initial_base%>%
+  ungroup()%>%
+  summarise(n_potential_renewals=n_distinct(paste(shiptocustomernumber,ordernumber)),
+            n_renewals=n_distinct(ifelse(!is.na(renewalordernumber),paste(shiptocustomernumber,ordernumber),NA),na.rm=TRUE),
+            avg_renewal_rate=mean(rate),
+            mean_rate_for_renewed_users=mean(ifelse(!is.na(renewalordernumber),rate,NA),na.rm=TRUE),
+            mean_rate_for_canceled_users=mean(ifelse(is.na(renewalordernumber),rate,NA),na.rm=TRUE))
+"
+"2","Error: object 'initial_base' not found
+"

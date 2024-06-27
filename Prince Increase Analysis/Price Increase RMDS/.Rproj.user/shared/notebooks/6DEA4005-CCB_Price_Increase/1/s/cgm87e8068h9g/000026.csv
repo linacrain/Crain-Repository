@@ -1,0 +1,14 @@
+"0","ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference"",""adv_order_number""=""ordernumber""))%>%
+  separate(start_date,into=c(""start_date"",""start_time""))
+"
+"2","Warning:"
+"2"," [38;5;232mExpected 2 pieces. Additional pieces discarded in 209525 rows [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+14, 15, 16, 17, 18, 19, 20, ...].[39m
+"

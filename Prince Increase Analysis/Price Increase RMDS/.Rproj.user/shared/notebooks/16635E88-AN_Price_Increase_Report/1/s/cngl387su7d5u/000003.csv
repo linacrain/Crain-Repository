@@ -1,0 +1,15 @@
+"0","basic_digital_monthly_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = basic_digital_monthly)%>%
+  mutate(`Category`=ifelse(str_detect(category,""pre_2nd""),""Initial Price Increase (5/1/2023 - 12/14/2023)"",
+                                        ""Second Price Increase (12/15/2023 Onwards)""))%>%
+  mutate(.epred_prop = .epred / total_contracts) %>% 
+  mutate(`Category`=factor(`Category`,levels=c(""Second Price Increase (12/15/2023 Onwards)"",""Initial Price Increase (5/1/2023 - 12/14/2023)"")))%>%
+  ggplot(aes(x = .epred_prop, y = forcats::fct_inorder(Category), fill = Category))+stat_halfeye()+theme_minimal()+labs(x=""Proportion of New Users who subscribe at Basic Digital Monthly"",y=NULL)+guides(fill=""none"")+scale_x_continuous(labels = label_percent())
+"
+"2","Warning in gzfile(file, ""wb"") :"
+"2","
+ "
+"2"," cannot open compressed file 'C:/Users/andrew.lin/OneDrive - Crain Communications/Documents/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/.Rproj.user/shared/notebooks/16635E88-AN_Price_Increase_Report/1/2C6A0F8421e6817f/cngl387su7d5u_t/5a7175ab30fb4a9cbb199d25c939b906.snapshot', probable reason 'No such file or directory'
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

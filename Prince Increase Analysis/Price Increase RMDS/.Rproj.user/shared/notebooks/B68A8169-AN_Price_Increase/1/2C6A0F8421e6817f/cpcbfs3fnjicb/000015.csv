@@ -1,0 +1,4 @@
+"0","basic_digital_annual<-full_table%>%"
+"0","  filter(pubcode==""Basic Digital""&termlength==""Annual"")"
+"0",""
+"0","basic_digital_annual"

@@ -1,0 +1,6 @@
+"0","test<-dbGetQuery(prod,statement=read_file('test_super_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  syntax error at or near ""cdb_data""
+LINE 654: cdb_data as (
+          ^
+"

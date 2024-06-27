@@ -1,0 +1,22 @@
+"0","sub_page_conv_rate_beta_binomial%>% 
+  epred_draws(newdata = sub_page_conv_rate) %>% 
+  mutate(.epred_prop = .epred / total_unique_visitors) %>% 
+  ungroup() %>% 
+  mutate(category = fct_relevel(category))%>%
+  compare_levels(.epred_prop, by = category,
+                 comparison = ""pairwise"")%>%
+  ggplot(aes(x = .epred_prop)) +
+  stat_halfeye() +
+  scale_x_continuous(labels = label_percent(), expand = c(0, 0.015)) +
+  guides(fill = ""none"") +
+  labs(x = ""Percentage Point Diff in Proportions"",
+       y = NULL) +
+  theme_minimal()
+"
+"2","Warning in gzfile(file, ""wb"") :"
+"2","
+ "
+"2"," cannot open compressed file 'C:/Users/andrew.lin/OneDrive - Crain Communications/Documents/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/.Rproj.user/shared/notebooks/B68A8169-AN_Price_Increase/1/2C6A0F8421e6817f/cir5suz44tyet_t/706c8abce0db4b4494f619be5e53195f.snapshot', probable reason 'No such file or directory'
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

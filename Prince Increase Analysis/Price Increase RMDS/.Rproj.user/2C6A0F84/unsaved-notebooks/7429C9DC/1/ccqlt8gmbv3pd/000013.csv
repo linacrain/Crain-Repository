@@ -1,0 +1,32 @@
+"0","full_list%>%
+  head(10000)%>%
+  separate(orderdate,into=c(""orderdate"",""ordertime""),sep="" "")%>%
+  separate(startissuedate,into=c(""startissuedate"",""startissuetime""),sep="" "")%>%
+  separate(expirationissuedate,into=c(""expirationissuedate"",""expirationissuetime""),sep="" "")%>%
+  separate(renewalstartdate,into=c(""renewalstartdate"",""renewalstarttime""),sep="" "")%>%
+  mutate(orderdate=as.Date(orderdate,format=""%Y-%m-%d""),
+         startissuedate=as.Date(startissuedate,format=""%Y-%m-%d""),
+         expirationissuedate=as.Date(expirationissuedate,format=""%Y-%m-%d""),
+         renewalstartdate=as.Date(renewalstartdate,format=""%Y-%m-%d""))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,brand)%>%
+  summarise(orderdate=max(orderdate),
+            startissuedate=max(startissuedate),
+            termnumber=max(termnumber),
+            rate=max(rate),
+            expirationissuedate=max(expirationissuedate),
+            renewalrate=max(renewalrate,na.rm=TRUE),
+            renewalstartdate=max(renewalstartdate,na.rm=TRUE)
+            )
+"
+"2","Warning:"
+"2"," [38;5;232mThere were 10163 warnings in `summarise()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `renewalrate = max(renewalrate, na.rm = TRUE)`.
+[36mℹ[38;5;232m In group 5: `shiptocustomernumber = ""1057508.00""`, `ordernumber = ""D5314313""`, `pelcro_subid = NA`, `brand = ""AA""`.[39m
+Caused by warning in `max()`:
+[33m![39m no non-missing arguments, returning NA
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 10162 remaining warnings.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid'. You can override using the
+`.groups` argument.[39m
+"

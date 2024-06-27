@@ -1,0 +1,6 @@
+"0","test<-dbGetQuery(prod, statement = read_file('an_working_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  syntax error at or near ""from""
+LINE 425: select r.* from renewal_row_no_inbetween r from where not ex...
+                                                     ^
+"

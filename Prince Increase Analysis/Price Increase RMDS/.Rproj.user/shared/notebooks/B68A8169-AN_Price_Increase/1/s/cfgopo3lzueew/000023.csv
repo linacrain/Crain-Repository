@@ -1,0 +1,4 @@
+"0","test<-dbGetQuery(prod, statement = read_file('an_working_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  relation ""renewal_row_in_between"" does not exist
+"

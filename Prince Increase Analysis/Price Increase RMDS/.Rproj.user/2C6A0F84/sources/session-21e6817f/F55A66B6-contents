@@ -1,0 +1,42 @@
+---
+title: "Testing BRMS Knitting"
+author: "Andrew Lin"
+date: "2024-06-27"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(cmdstanr)
+library(rstan)
+library(tidybayes)
+library(brms)
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library("readr") 
+library(kableExtra)
+library(knitr)
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+
+an_price_increase_adobe<-read.csv("an_price_increase_adobe.csv")
+
+sub_page_conv_rate<-as.tibble(an_price_increase_adobe%>%
+  mutate(category=ifelse(date<as.Date('12/15/2023',format="%m/%d/%Y"),"pre_2nd_price_increase","post_2nd_price_increase"))%>%
+  group_by(category)%>%
+  summarise(total_unique_visitors=sum(unique_visitors),
+            total_paid_orders=sum(new_paid_orders))%>%
+  mutate(subscription_landing_page_conv_rate=total_paid_orders/total_unique_visitors))
+
+sub_page_conv_rate_beta_binomial<-readRDS('sub_page_conv_rate_beta_binomial.rds')
+
+print(sub_page_conv_rate_beta_binomial)
+
+sub_page_conv_rate_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = sub_page_conv_rate)
+
+```
+

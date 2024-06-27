@@ -1,6 +1,17 @@
-"0","migration_termnumber<-migrated_rows%>%
-  group_by(pelcro_subid,original_adv_cust_value)%>%
-  summarise(m=max(termnumber))
-"
-"1","[38;5;232m`summarise()` has grouped output by 'pelcro_subid'. You can override using the `.groups` argument.[39m
+"0","reduced<-ccb_adv_data%>%"
+"0","  filter(startissuedate>=as.Date(""2016-01-01"",format=""%Y-%m-%d""))%>%"
+"0","  group_by(shiptocustomernumber,ordernumber)%>%"
+"0","  mutate(pub_level=ifelse(publicationcode=='CB1',1,"
+"0","                          ifelse(publicationcode=='CB2',2,"
+"0","                          ifelse(publicationcode=='CB3',3,4))),"
+"0","         did_renew=ifelse(is.na(renewalordernumber),0,1),"
+"0","         did_renew=max(did_renew))%>%"
+"0","  mutate(max_pub=max(pub_level),"
+"0","         termnumber=max(termnumber),"
+"0","         rate=sum(rate),"
+"0","         renewalrate=sum(renewalrate,na.rm=TRUE),"
+"0","         )%>%"
+"0","  filter(pub_level==max_pub)"
+"2","Error in ccb_adv_data %>% filter(startissuedate >= as.Date(""2016-01-01"",  : 
+  could not find function ""%>%""
 "

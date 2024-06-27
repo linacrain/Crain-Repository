@@ -1,0 +1,34 @@
+"0","an_query%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate<=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(expirationissuedate>=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(pubcode==""Basic Digital""|pubcode==""Premium"")%>%
+  filter(expirationissuedate<=today()|(expirationissuedate>=today()&!is.na(renewalordernumber)))%>%
+  mutate(pubcode=ifelse(pubcode==""AN3"",""Digital All Access"",pubcode))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(pubcode,termlength)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals=n_distinct(ifelse(renewalordernumber>0,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            mean_rate_renewal_price_increase=mean(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            mean_rate_churn_price_increase=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            median_rate_renewal_price_increase=median(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE),
+            median_rate_churn_price_increase=median(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE),
+            mean_termnumber_renewal=mean(ifelse(ifelse(renewalordernumber>0,rate,NA),na.rm=TRUE)),
+            mean_termnumber_churn=mean(ifelse(renewalordernumber>0,NA,rate),na.rm=TRUE))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew',
+'pubcode', 'termnumber', 'termlength'. You can override using the `.groups` argument.[39m
+"
+"1","[1m[33mError[39m in `summarise()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `mean_termnumber_renewal = mean(ifelse(ifelse(renewalordernumber > 0, rate, NA),
+  na.rm = TRUE))`.
+[36mℹ[38;5;232m In group 1: `pubcode = ""Basic Digital""` and `termlength = ""Annual""`.[39m
+[1mCaused by error in `ifelse()`:[22m
+[33m![39m unused argument (na.rm = TRUE)
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m 11. [39m[1mbase[22m::mean(ifelse(ifelse(renewalordernumber > 0, rate, NA), na.rm = TRUE))
+"

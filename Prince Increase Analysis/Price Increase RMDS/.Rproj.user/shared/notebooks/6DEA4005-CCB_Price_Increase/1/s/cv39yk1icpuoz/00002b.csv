@@ -1,0 +1,5 @@
+"0","ccb_autorenew<-dbGetQuery(prod,read_file('ccb_autorenew_investigation.sql'))
+"
+"2","Error in h(simpleError(msg, call)) : 
+  error in evaluating the argument 'statement' in selecting a method for function 'dbGetQuery': 'ccb_autorenew_investigation.sql' does not exist in current working directory ('C:/Users/andrew.lin/OneDrive - Crain Communications/Documents/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS').
+"

@@ -1,0 +1,13 @@
+"0","ccb_working_query%>%
+  filter(donortype==""I"")%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(adv_sub_id=as.numeric(adv_sub_id))%>%
+  select(-c(test,position,test2))%>%
+  mutate(ordernumber=as.character(ordernumber))%>%
+  left_join(last_term,by=c(""adv_sub_id""=""subscriptionreference"",""adv_order_number""=""ordernumber""))%>%
+  seperate(start_date,into=c(""start_date"",""start_time""))
+"
+"2","Error in seperate(., start_date, into = c(""start_date"", ""start_time"")) : 
+  could not find function ""seperate""
+"

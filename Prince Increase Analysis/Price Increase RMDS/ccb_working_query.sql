@@ -47,7 +47,7 @@ from prod.reporting.AdvantageSubscriptionTerms Expire
 LEFT join prod.reporting.advantage_subscription Sub on Sub.SubscriptionReference = Expire.SubscriptionReference
 left join prod.reporting.AdvantageSubscriptionTerms Renewal on Renewal.SubscriptionReference = Expire.SubscriptionReference and Renewal.TermNumber = Expire.TermNumber + 1
 left join prod.reporting.advantage_customer BillTo on BillTo.CustomerNumber = Expire.BillToCustomerNumber and BillTo.AddressCode = Expire.BillToAddressCode
-where expire.OwningOrganizaion='CCB' and expire.donortype='I'
+where expire.OwningOrganizaion='CCB'
 ),
 reduced_invoice as (
 select 

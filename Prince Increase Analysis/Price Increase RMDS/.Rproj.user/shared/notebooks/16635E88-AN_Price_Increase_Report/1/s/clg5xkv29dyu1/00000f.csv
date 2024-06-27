@@ -1,0 +1,9 @@
+"0","sub_page_conv_rate_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = sub_page_conv_rate)%>%
+  mutate(.epred_prop = .epred / total_unique_visitors) %>% 
+  mutate(`Category`=ifelse(str_detect(category,""pre_2nd""),""Initial Price Increase (5/1/2023 - 12/14/2023)"",
+                                        ""Second Price Increase (12/15/2023 Onwards)""))%>%
+  ggplot(aes(x = .epred_prop, y = Category, fill = category))+stat_halfeye()+theme_minimal()+labs(x=""Proportion of Visitors who convert during a visit with Sub Page"",y=NULL)+guides(fill=""none"")+scale_x_continuous(labels = label_percent())
+"
+"2","Error in gzfile(file, ""wb"") : cannot open the connection
+"

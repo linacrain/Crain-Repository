@@ -1,0 +1,12 @@
+"0","advantage_rows%>%
+  union(migrated_rows)%>%
+  union(p_rows)
+"
+"1","[1m[33mError[39m in `union()`:[22m
+[38;5;232m[33m![38;5;232m `x` and `y` are not compatible.
+[31m✖[38;5;232m Incompatible types for column `shiptocustomernumber`: double vs character.
+[31m✖[38;5;232m Incompatible types for column `ordernumber`: character vs integer64.[39m
+Backtrace:
+[90m 1. [39madvantage_rows %>% union(migrated_rows) %>% union(p_rows)
+[90m 3. [39m[1m[94mdplyr:::union.data.frame([39m[22m., p_rows[1m[94m)[39m[22m
+"

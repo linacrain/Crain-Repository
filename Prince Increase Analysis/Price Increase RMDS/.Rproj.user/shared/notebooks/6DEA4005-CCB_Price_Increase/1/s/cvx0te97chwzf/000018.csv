@@ -1,0 +1,14 @@
+"0","ccb_adv_data%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate>=as.Date(""2016-01-01"",format=""%Y-%m-%d""))%>%
+  filter(!subscriptionreference%in%ccb_data$adv_subid)%>%
+  left_join(ccb_data,by=c(""shiptocustomernumber""=""original_adv_cust_value"",""ordernumber""=""ordernumber""))
+"
+"2","Warning in left_join(., ccb_data, by = c(shiptocustomernumber = ""original_adv_cust_value"",  :"
+"2","
+ "
+"2"," [38;5;232mDetected an unexpected many-to-many relationship between `x` and `y`.
+[36mℹ[38;5;232m Row 61476 of `x` matches multiple rows in `y`.
+[36mℹ[38;5;232m Row 610513 of `y` matches multiple rows in `x`.
+[36mℹ[38;5;232m If a many-to-many relationship is expected, set `relationship = ""many-to-many""` to silence this warning.[39m
+"

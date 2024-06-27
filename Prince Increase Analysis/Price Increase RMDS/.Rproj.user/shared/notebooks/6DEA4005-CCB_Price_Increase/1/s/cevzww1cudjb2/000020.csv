@@ -1,0 +1,12 @@
+"0","reduced%>%
+  left_join(ccb_autorenew,by=c('subscriptionreference'='adv_sub_id','ordernumber'='adv_order_number'))%>%
+  filter(!is.na(rate.y))%>%
+  select(subscriptionreference,ordernumber,termnumber,orderdate.x,startissuedate,rate.x,expirationissuedate,termlength.x,reneawlpolicy,renewaltermnumber,publicationcode.y,start_date,expire_date,rate.y)
+"
+"1","[1m[33mError[39m in `select()`:[22m
+[33m![39m Can't subset columns that don't exist.
+[31m✖[39m Column `reneawlpolicy` doesn't exist.
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 3. [39m[1m[94mdplyr:::select.data.frame([39m[22m...[1m[94m)[39m[22m
+"

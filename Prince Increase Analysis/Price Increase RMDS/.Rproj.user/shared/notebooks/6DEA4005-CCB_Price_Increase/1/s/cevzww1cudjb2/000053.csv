@@ -1,0 +1,22 @@
+"0","migration_rows<-ccb_autorenew%>%
+  group_by(subscriptionid)%>%
+  arrange(start_date,.by_group=TRUE)%>%
+  mutate(renewalordernumber=lead(ordernumber,order_by=subscriptionid),
+         renewalrate=lead(rate,order_by=subscriptionid),
+         renewalstartdate=lead(startissuedate,order_by=subscriptionid))%>%
+  group_by(subscriptionid,adv_sub_id,adv_order_number)%>%
+  mutate(min_date=min(start_date))%>%
+  filter(min_date==start_date)
+"
+"1","[1m[33mError[39m in `mutate()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `renewalstartdate = lead(startissuedate, order_by = subscriptionid)`.
+[36mℹ[38;5;232m In group 1: `subscriptionid = 906114`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'startissuedate' not found
+Backtrace:
+[90m  1. [39m... %>% filter(min_date == start_date)
+[90m 12. [39m[1mdplyr[22m::lead(startissuedate, order_by = subscriptionid)
+[90m 13. [39mdplyr:::shift(x, n = -n, default = default, order_by = order_by)
+[90m 14. [39mdplyr::with_order(...)
+[90m 16. [39m[1mvctrs[22m::vec_size(x)
+"

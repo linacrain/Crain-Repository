@@ -1,0 +1,27 @@
+"0","an_query%>%
+  filter(donortype==""I"")%>%
+  filter(startissuedate<=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(expirationissuedate>=as.Date(""01/08/2024"",format=""%m/%d/%Y""))%>%
+  filter(rate>0)%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,adv_subid,isautorenew,pubcode,termnumber,termlength,rate)%>%
+  summarise(renewalrate=max(renewalrate))%>%
+  ungroup()%>%
+  filter(expirationissuedate<=today()|(expirationissuedate>=today()&!is.na(renewalordernumber)))%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber)),
+            n_distinct_renewals=n_distinct(ifelse(!is.na(renewalordernumber),paste(shiptocustomernumber,ordernumber),NA),na.rm=TRUE))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'adv_subid',
+'isautorenew', 'pubcode', 'termnumber', 'termlength'. You can override using the `.groups` argument.[39m
+"
+"1","[1m[33mError[39m in `filter()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `|...`.[39m
+[1mCaused by error:[22m
+[33m![39m object 'expirationissuedate' not found
+Backtrace:
+[90m 1. [39m... %>% ...
+[90m 4. [39m[1m[94mdplyr:::filter.data.frame([39m[22m...[1m[94m)[39m[22m
+[90m 5. [39mdplyr:::filter_rows(.data, dots, by)
+[90m 6. [39mdplyr:::filter_eval(...)
+[90m 8. [39mmask$eval_all_filter(dots, env_filter)
+[90m 9. [39m[1mdplyr[22m (local) eval()
+"

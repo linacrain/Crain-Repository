@@ -1,0 +1,4 @@
+"0","test<-dbGetQuery(prod, statement = read_file('an_working_query.sql'))
+"
+"2","Error: Failed to prepare query : ERROR:  column ""shpitocustomernumber"" does not exist in min_start_date
+"

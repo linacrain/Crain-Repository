@@ -1,0 +1,25 @@
+"0","aa_investigation%>%
+  filter(pubcode==""Standard"")%>%
+  filter(orderdate>=as.Date(""01-12-2024"",format=""%m-%d-%Y""))%>%
+  filter(termnumber==1)%>%
+  filter(donortype==""I"")%>%
+  filter(rate<=399)%>%
+  filter(rate!=0|rate!=0.01)%>%
+  filter((rate>=199&termlength==""Annual"")|(rate>=20&termlength==""Monthly""))%>%
+  mutate(termnumber=as.numeric(termnumber))%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid,isautorenew,pubcode,termnumber,termlength,rate,expirationissuedate)%>%
+  summarise(renewalrate=max(renewalrate),
+            renewalordernumber=n_distinct(renewalordernumber,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(termlength,pubcode,isautorenew)%>%
+  summarise(n_distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,pelcro_subid)),
+            n_distinct_renewals=n_distinct(ifelse((renewalordernumber>0&renewalrate>=199)|(renewalordernumber>0&renewalrate>rate),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_renewals_no_increase=n_distinct(ifelse(renewalordernumber>0&renewalrate<rate,paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_undetermined=n_distinct(ifelse(renewalordernumber==0&expirationissuedate>=today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE),
+            n_distinct_churned=n_distinct(ifelse(renewalordernumber==0&expirationissuedate<today(),paste(shiptocustomernumber,ordernumber,pelcro_subid),NA),na.rm=TRUE))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'shiptocustomernumber', 'ordernumber', 'pelcro_subid', 'isautorenew', 'pubcode',
+'termnumber', 'termlength', 'rate'. You can override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'termlength', 'pubcode'. You can override using the `.groups` argument.[39m
+"

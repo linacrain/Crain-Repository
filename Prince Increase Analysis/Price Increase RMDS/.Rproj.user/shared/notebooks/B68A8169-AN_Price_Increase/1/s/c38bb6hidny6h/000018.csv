@@ -1,0 +1,14 @@
+"0","an_adv_data%>%
+  distinct()%>%
+  filter(!subscriptionreference%in%an_query$adv_subid)%>%
+  left_join(an_query,by=c(""shiptocustomernumber""=""original_adv_cust_value"",""ordernumber""=""ordernumber""))%>%
+  filter(is.na(brand))
+"
+"2","Warning in left_join(., an_query, by = c(shiptocustomernumber = ""original_adv_cust_value"",  :"
+"2","
+ "
+"2"," [38;5;232mDetected an unexpected many-to-many relationship between `x` and `y`.
+[36mℹ[38;5;232m Row 4548 of `x` matches multiple rows in `y`.
+[36mℹ[38;5;232m Row 539807 of `y` matches multiple rows in `x`.
+[36mℹ[38;5;232m If a many-to-many relationship is expected, set `relationship = ""many-to-many""` to silence this warning.[39m
+"
