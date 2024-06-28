@@ -1,0 +1,174 @@
+---
+title: "Mather Scripting"
+author: "Andrew Lin"
+date: "2024-06-28"
+output: html_document
+---
+
+
+#Reading in CSV Files
+```{r}
+library(tidyverse)
+library(readr)
+library(DBI)
+library(RPostgres)
+
+setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\GitHub\\Crain-Repository\\Mather Scripts\\Mather Scripts")
+
+pelcro <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'pelcro',
+               sslmode='require')
+
+cleaned_formatting<-dbGetQuery(pelcro,"select * from staging.matherpricetarget_ang_control")
+```
+
+
+#06/04/2024
+```{r}
+uscan_controls_20240604<-read.csv("uscan_controls_20240604.csv")
+ANG_20240604<-read.csv("ANG_Subscriber_2024-06-04.csv")
+cleaned_formatting
+```
+
+```{r}
+write.csv(uscan_controls_20240604%>%
+  left_join(ANG_20240604,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_controls_20240604.csv")
+```
+
+#06/25/2024
+
+```{r}
+uscan_controls_20240625<-read.csv("cleaned_uscan_controls_20240625.csv")
+ANG_20240625<-read.csv("ANG_Subscriber_2024-06-25.csv")
+
+uscan_controls_20240625
+```
+#06/11/2024
+```{r}
+uscan_controls_20240611<-read.csv("uscan_controls_20240611.csv")
+ANG_20240611<-read.csv("ANG_Subscriber_2024-06-11.csv")
+
+write.csv(uscan_controls_20240611%>%
+  left_join(ANG_20240604,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_controls_20240611.csv")
+```
+
+#6/18/2024
+
+```{r}
+uscan_controls_20240618<-read.csv("cleaned_uscan_controls_20240618.csv")
+ANG_20240618<-read.csv("ANG_Subscriber_2024_06_18.csv")
+
+```
+#Target Lists
+
+```{r}
+uscan_targets_20240604<-read.csv("uscan_targets_20240604.csv")
+write.csv(uscan_targets_20240604%>%
+  left_join(ANG_20240604,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_targets_20240604.csv")
+```
+
+
+```{r}
+uscan_targets_20240611<-read.csv("uscan_targets_20240611.csv")
+write.csv(uscan_targets_20240611%>%
+  left_join(ANG_20240611,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_targets_20240611.csv")
+```
+
+
+```{r}
+uscan_targets_20240618<-read.csv("uscan_targets_20240618.csv")
+write.csv(uscan_targets_20240618%>%
+  left_join(ANG_20240618,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_targets_20240618.csv")
+```
+
+```{r}
+uscan_targets_20240625<-read.csv("uscan_targets_20240625.csv")
+write.csv(uscan_targets_20240625%>%
+  left_join(ANG_20240625,by=c("subscription_id"="pelcro_subscription_id"))%>%
+  mutate(subscriptionid=subscription_id,
+         customerid=pelcro_customer_id,
+         planid=plan_id,
+         quantity=plan_interval_count,
+         addressid=shipping_address_id,
+         brand=businessunitcode,
+         productid=product_id.y,
+         billingmethod=billing_method.y,
+         source="Renewal",
+         pricingsource=pricing_source,
+         siteid=site_id
+         )%>%
+  select(siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource),"cleaned_uscan_targets_20240625.csv")
+```
+
+
+
+

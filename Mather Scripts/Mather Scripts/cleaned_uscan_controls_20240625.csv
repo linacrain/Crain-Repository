@@ -1,0 +1,4 @@
+﻿siteid,customerid,subscriptionid,planid,quantity,source,addressid,brand,productid,billingmethod,pricingsource
+5110,4549119,1934527,31637,1,Renewal,2534840,ANG,2195,send_invoice,MP
+5110,4554214,1944169,31472,1,Renewal,2558825,ANG,2194,send_invoice,MP
+5110,4561102,1957465,31637,1,Renewal,2588608,ANG,2195,send_invoice,MP

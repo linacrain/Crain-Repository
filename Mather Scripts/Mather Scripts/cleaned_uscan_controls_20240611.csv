@@ -1,0 +1,7 @@
+"","siteid","customerid","subscriptionid","planid","quantity","source","addressid","brand","productid","billingmethod","pricingsource"
+"1",5110,4546542,1930496,31637,1,"Renewal",2522831,"ANG",2195,"send_invoice","MP"
+"2",5110,4547542,1931815,31637,1,"Renewal",2526575,"ANG",2195,"send_invoice","MP"
+"3",5110,4548104,1932330,31637,1,"Renewal",2528977,"ANG",2195,"send_invoice","MP"
+"4",5110,4551578,1938935,31637,1,"Renewal",2545986,"ANG",2195,"send_invoice","MP"
+"5",5110,4558810,1951668,31637,1,"Renewal",2577000,"ANG",2195,"send_invoice","MP"
+"6",5110,4561063,1957346,31472,1,"Renewal",2588390,"ANG",2194,"send_invoice","MP"
