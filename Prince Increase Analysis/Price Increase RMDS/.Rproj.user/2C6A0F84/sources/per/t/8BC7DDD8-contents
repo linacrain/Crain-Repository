@@ -1,0 +1,97 @@
+---
+title: "Test for Inflow Reporting"
+author: "Andrew Lin"
+date: "2024-06-20"
+output: html_document
+---
+
+```{r}
+
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+test<-dbGetQuery(prod,statement=read_file('test_super_query.sql'))
+cdb_t<-dbGetQuery(prod,statement=read_file('cdb_query.sql'))
+ccl_pelcro<-dbGetQuery(prod,"select * from prod.pelcro.subscription where businessunitcode='CCL'")
+ac_pelcro<-dbGetQuery(prod,"select * from prod.pelcro.subscription where businessunitcode='ANG' and productname like '%Canada%'")
+ac_adv<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='AC'")
+
+
+ccl_query_t<-dbGetQuery(prod,statement=read_file('ccl_query.sql'))
+adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query where owningoffice='CL'")
+
+mh_query<-dbGetQuery(prod,statement=read_file("mh_test.sql"))
+```
+
+```{r}
+ccl_pelcro%>%
+  filter(!subscriptionid%in%ccl_query_t$pelcro_subid)%>%
+  filter(ispaid==TRUE&isindividual==TRUE&issourced==TRUE)
+
+
+adv_data%>%
+  filter(!subscriptionreference%in%ccl_query_t$adv_subid)%>%
+  left_join(ccl_query_t,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))%>%
+  filter(is.na(shiptocustomernumber.y))
+  arrange(termnumber)
+  
+  
+write.csv(test,"full_list_excluding_ccb_ac.csv")
+
+
+mh_query
+
+
+
+
+test%>%
+  filter(brand=="MH")%>%
+  filter(as.Date(startissuedate,format="%Y-%m-%d")>=as.Date("2016-01-01",format="%Y-%m-%d"))%>%
+  group_by(shiptocustomernumber,ordernumber,startissuedate)%>%
+  summarise(m=max(rate))%>%
+  ungroup()%>%
+  mutate(startissuedate=as.Date(startissuedate,format="%Y-%m-%d"))%>%
+  mutate(year=year(startissuedate))%>%
+  group_by(year)%>%
+  summarise(total_rev=sum(m),
+            n_contracts=n_distinct(paste(shiptocustomernumber,ordernumber)))%>%
+  mutate(arpu=total_rev/n_contracts)
+```
+
+```{r}
+mh_query%>%
+  filter(as.Date(startissuedate,format="%Y-%m-%d")>=as.Date("2016-01-01",format="%Y-%m-%d"))%>%
+  group_by(shiptocustomernumber,ordernumber,startissuedate)%>%
+  summarise(m=max(rate))%>%
+  ungroup()%>%
+  mutate(startissuedate=as.Date(startissuedate,format="%Y-%m-%d"))%>%
+  mutate(year=year(startissuedate))%>%
+  group_by(year)%>%
+  summarise(total_rev=sum(m),
+            n_contracts=n_distinct(paste(shiptocustomernumber,ordernumber)))%>%
+  mutate(arpu=total_rev/n_contracts)
+```
+
+
+```{r}
+adv_data_anc<-dbGetQuery(prod,read_file('anc_adv.sql'))
+
+adv_data_anc
+
+ac_pelcro%>%
+  filter(!subscriptionid%in%adv_data_anc$pelcro_subid)%>%
+  filter(isindividual==TRUE)%>%
+  filter(ispaid==TRUE)
+```
+```{r}
+ac_adv%>%
+  filter(!subscriptionreference%in%adv_data_anc$subscriptionreference)%>%
+  left_join(adv_data_anc,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))%>%
+  filter(is.na(termnumber.y))
+```

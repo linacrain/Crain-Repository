@@ -3,7 +3,7 @@
     "path": "~/GitHub/Crain-Repository/Prince Increase Analysis/Price Increase RMDS/AN_Price_Increase.Rmd",
     "project_path": "AN_Price_Increase.Rmd",
     "type": "r_markdown",
-    "hash": "3772327330",
+    "hash": "1692467821",
     "contents": "",
     "dirty": false,
     "created": 1718302625790.0,
@@ -13,15 +13,15 @@
         "tempName": "Untitled1",
         "source_window_id": "",
         "Source": "Source",
-        "cursorPosition": "27,0",
-        "scrollLine": "12"
+        "cursorPosition": "307,0",
+        "scrollLine": "294"
     },
-    "folds": "",
-    "lastKnownWriteTime": 1719497182,
+    "folds": "245|6|247|0|\n248|6|250|0|\n294|6|296|0|\n298|6|300|0|\n362|6|364|0|\n366|6|368|0|\n",
+    "lastKnownWriteTime": 1719524799,
     "encoding": "UTF-8",
     "collab_server": "",
     "source_window": "",
-    "last_content_update": 1719498151781,
+    "last_content_update": 1719524799844,
     "read_only": false,
     "read_only_alternatives": []
 }

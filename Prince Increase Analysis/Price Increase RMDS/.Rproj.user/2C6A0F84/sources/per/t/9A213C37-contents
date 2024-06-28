@@ -1,0 +1,493 @@
+---
+title: "Validation Tests"
+author: "Andrew Lin"
+date: "2024-05-09"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(RPostgres)
+
+dev <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'dev',
+               sslmode='require')
+
+
+cdb_pelcro<-"select * from pelcro_records.cdb"
+cdb_p<-dbGetQuery(dev,cdb_pelcro)
+
+cny_test_pelcro<-"select * from pelcro_records.cny_test_db"
+cny_test_p<-dbGetQuery(dev,cny_test_pelcro)
+
+adv_data<-dbGetQuery(prod,"select * from dev.pelcro_records.advantage_query")
+
+invoice_table<-dbGetQuery(dev,"select * from prod.pelcro.invoice")
+
+pelcro_table<-dbGetQuery(dev,"select  * from prod.pelcro.subscription
+where ispaid is true")
+
+
+city_brand_table<-dbGetQuery(prod,statement=read_file('adage_jonathan_test.sql'))
+```
+
+Test 1: Unique Ordernumber, Customernumber, and Pelcro Subscription ID
+
+CBD
+```{r}
+cdb_p%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
+  mutate(n=n())%>%
+  filter(n>1)
+```
+CNY
+```{r}
+cny_test_p%>%
+  group_by(shiptocustomernumber,ordernumber,pelcro_subid)%>%
+  mutate(n=n())%>%
+  filter(n>1)
+```
+
+Test 2: Make sure all contracts > 2022 from Advantage are captured via subscriptionreference-- missing subscription references are tested to see if there respective contracts have been rolled up.
+
+CDB
+```{r}
+adv_data%>%
+  filter(publicationcode=="CD"|publicationcode=="CDW")%>%
+  filter(!subscriptionreference%in%cdb_p$adv_subid)%>%
+  filter(expirationissuedate>=as.Date("01-01-2022","%m-%d-%Y"))%>%
+  select(shiptocustomernumber,ordernumber,subscriptionreference)%>%
+  anti_join(cdb_p,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))
+```
+CNY
+```{r}
+adv_data%>%
+  filter(publicationcode=="CN"|publicationcode=="CNW"|publicationcode=="CND"|publicationcode=="NHF")%>%
+  filter(!subscriptionreference%in%cny_test_p$adv_subid)%>%
+  filter(expirationissuedate>=as.Date("01-01-2022","%m-%d-%Y"))%>%
+  select(shiptocustomernumber,ordernumber,subscriptionreference)%>%
+  anti_join(cny_test_p,by=c("shiptocustomernumber"="original_adv_cust_value","ordernumber"="ordernumber"))
+```
+
+
+Test 3: All Paid Pelcro subscriptions are captured-- those that are not captured, test to see if it stems from a missing advantage subscription value (ie. discrepancy in the Advantage Query). Will reach out to see how to curb these issues.
+
+CDB
+
+```{r}
+pelcro_table%>%
+  filter(businessunitcode=="CDB")%>%
+  filter(!subscriptionid%in%cdb_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))%>%
+  left_join(adv_data,by=c("oldproviderid"="subscriptionreference"))%>%
+  filter(!is.na(shiptocustomernumber))
+
+missing_paid_pelcro_cdb<-pelcro_table%>%
+  filter(businessunitcode=="CDB")%>%
+  filter(!subscriptionid%in%cdb_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))
+
+adv_data%>%
+  filter(subscriptionreference%in%missing_paid_pelcro_cdb$oldproviderid)
+```
+
+CNY:
+```{r}
+pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(!subscriptionid%in%cny_test_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))%>%
+  left_join(adv_data,by=c("oldproviderid"="subscriptionreference"))%>%
+  filter(!is.na(shiptocustomernumber))
+
+missing_paid_pelcro_cny<-pelcro_table%>%
+  filter(businessunitcode=="CNY")%>%
+  filter(!subscriptionid%in%cny_test_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))
+
+adv_data%>%
+  filter(subscriptionreference%in%missing_paid_pelcro_cny$oldproviderid)
+```
+
+Test 4: Comparing active and past due subscription counts from Pelcro (BEST Report Counts)
+
+CDB Capture Rate
+```{r}
+pelcro_table$subscriptionid<-as.numeric(pelcro_table$subscriptionid)
+
+cdb_total_subs<-pelcro_table%>%
+  filter(businessunitcode=="CDB"&ispaid==TRUE)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  summarise(total_subs=sum(quantity,na.rm=TRUE))
+
+cdb_al_counts<-cdb_p%>%
+  left_join(pelcro_table,by=c("pelcro_subid"="subscriptionid"))%>%
+  group_by(pelcro_subid)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  summarise(quantity=max(quantity))%>%
+  ungroup()%>%
+  summarise(total_subs=sum(quantity,na.rm=TRUE))
+
+capture_percentage_cdb<-(cdb_al_counts$total_subs/cdb_total_subs$total_subs)*100
+difference_in_subs_cdb<-(cdb_total_subs$total_subs-cdb_al_counts$total_subs)
+
+full_str_cdb<-paste("Capture Rate: ",capture_percentage_cdb," Missing Sub Count: ",difference_in_subs_cdb)
+
+print(full_str_cdb)
+```
+
+
+```{r}
+pelcro_table$subscriptionid<-as.numeric(pelcro_table$subscriptionid)
+
+cny_total_subs<-pelcro_table%>%
+  filter(businessunitcode=="CNY"&ispaid==TRUE)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  summarise(total_subs=sum(quantity,na.rm=TRUE))
+
+cny_al_counts<-cny_test_p%>%
+  left_join(pelcro_table,by=c("pelcro_subid"="subscriptionid"))%>%
+  group_by(pelcro_subid)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  summarise(quantity=max(quantity))%>%
+  ungroup()%>%
+  summarise(total_subs=sum(quantity,na.rm=TRUE))
+
+capture_percentage_cny<-(cny_al_counts$total_subs/cny_total_subs$total_subs)*100
+difference_in_subs_cny<-(cny_total_subs$total_subs-cny_al_counts$total_subs)
+
+full_str_cny<-paste("Capture Rate: ",capture_percentage_cny," Missing Sub Count: ",difference_in_subs_cny)
+
+print(full_str_cny)
+```
+
+Missing Values List for Further Testing
+
+CDB
+```{r}
+pelcro_table%>%
+  filter(businessunitcode=="CDB"&ispaid==TRUE)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  filter(!subscriptionid%in%cdb_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid,quantity)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))%>%
+  left_join(adv_data,by=c("oldproviderid"="subscriptionreference"))%>%
+  mutate(has_corresponding_adv_row=firstissuesent)%>%
+  select(subscriptionid,oldproviderid,quantity,has_corresponding_adv_row)
+```
+
+CNY
+```{r}
+pelcro_table%>%
+  filter(businessunitcode=="CNY"&ispaid==TRUE)%>%
+  filter(subscriptionstatus=="active"|subscriptionstatus=="past_due")%>%
+  filter(!subscriptionid%in%cny_test_p$pelcro_subid)%>%
+  select(subscriptionid,oldproviderid,quantity)%>%
+  mutate(oldproviderid=as.numeric(str_replace_all(oldproviderid,"[^0-9]","")))%>%
+  left_join(adv_data,by=c("oldproviderid"="subscriptionreference"))%>%
+  mutate(has_corresponding_adv_row=firstissuesent)%>%
+  select(subscriptionid,oldproviderid,quantity,has_corresponding_adv_row)
+```
+
+recognized revenue example 02/20/2022
+```{r}
+adage_table%>%
+  filter(donortype=="I")%>%
+  filter(subscriptionclass=="R")%>%
+  filter(expirationissuedate>=as.Date("02-20-2022",format="%m-%d-%Y"))%>%
+  filter(startissuedate<=as.Date("02-27-2022",format="%m-%d-%Y"))%>%
+  mutate(start_date=if_else(startissuedate<as.Date("02-20-2022",format="%m-%d-%Y"),as.Date("02-20-2022",format="%m-%d-%Y"),startissuedate))%>%
+  mutate(recognized_dates=as.numeric(difftime(as.Date("02-27-2022",format="%m-%d-%Y"),start_date,units="days")))%>%
+  mutate(rate_per_day=rate/as.numeric(termlength))%>%
+  mutate(recognized_revenue_weekly=rate_per_day*recognized_dates)%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(recognized_revenue_weekly=max(recognized_revenue_weekly))%>%
+  ungroup()%>%
+  summarise(individual_subs=n_distinct(paste(shiptocustomernumber)))
+```
+
+```{r}
+adage_table%>%
+  filter(donortype=="I")%>%
+  filter(subscriptionclass=="R")%>%
+  filter(termtype%in%c("P","C"))%>%
+  filter(expirationissuedate>=as.Date("02-20-2022",format="%m-%d-%Y"))%>%
+  filter(startissuedate<as.Date("02-27-2022",format="%m-%d-%Y"))%>%
+  mutate(start_date=if_else(startissuedate<as.Date("02-20-2022",format="%m-%d-%Y"),as.Date("02-20-2022",format="%m-%d-%Y"),startissuedate))%>%
+  mutate(recognized_dates=as.numeric(difftime(as.Date("02-27-2022",format="%m-%d-%Y"),start_date,units="days")))%>%
+  mutate(rate_per_day=rate/as.numeric(termlength))%>%
+  mutate(recognized_revenue_weekly=rate_per_day*recognized_dates)%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(recognized_revenue_weekly=max(recognized_revenue_weekly))%>%
+  ungroup()%>%
+  summarise(sum(recognized_revenue_weekly)/n_distinct(paste(shiptocustomernumber,ordernumber)))
+```
+
+```{r}
+adage_table%>%
+  filter(donortype=="I")%>%
+  filter(subscriptionclass=="R")%>%
+  filter(expirationissuedate>=as.Date("02-20-2022",format="%m-%d-%Y"))%>%
+  filter(startissuedate<=as.Date("02-27-2022",format="%m-%d-%Y"))%>%
+  mutate(start_date=if_else(startissuedate<as.Date("02-20-2022",format="%m-%d-%Y"),as.Date("02-20-2022",format="%m-%d-%Y"),startissuedate))%>%
+  mutate(recognized_dates=as.numeric(difftime(as.Date("02-27-2022",format="%m-%d-%Y"),start_date,units="days")))%>%
+  mutate(rate_per_day=rate/as.numeric(termlength))%>%
+  mutate(recognized_revenue_weekly=rate_per_day*recognized_dates)%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(recognized_revenue_weekly=max(recognized_revenue_weekly))%>%
+  ungroup()%>%
+  summarise(individual_subs=n_distinct(paste(shiptocustomernumber)))
+
+
+
+
+
+
+start_date <- as.Date("2022-12-26")
+
+# Define the end date
+end_date <- as.Date("2016-01-01")
+
+# Generate the sequence of dates
+dates <- seq(from = start_date, to = end_date, by = "-7 days")
+
+dates<-as.data.frame(dates)
+
+
+date_index<-dates%>%
+  mutate(start_date=lead(dates),
+         end_date=dates)%>%
+  select(start_date,end_date)
+
+date_index
+```
+
+
+```{r}
+reduced_list<-adage_table%>%
+  filter(donortype=="I")%>%
+  filter(subscriptionclass=="R")%>%
+  filter(termtype%in%c("P","C"))%>%
+  filter(expirationissuedate>=as.Date("2016-01-01",format="%Y-%m-%d"))
+  crossing(date_index)
+  
+  
+
+  
+```
+  
+```{r}
+autonews_list<-reduced_list%>%
+  filter(brand=="AN")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+
+adage_list<-reduced_list%>%
+  filter(brand=="AA")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+  
+ccl_list<-reduced_list%>%
+  filter(brand=="CCL")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+  
+mh_list<-reduced_list%>%
+  filter(brand=="MH")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+```
+
+```{r}
+reduced_list%>%
+  group_by(shiptocustomernumber,ordernumber,adv_subid)%>%
+  mutate(n=n())%>%
+  filter(n>1)%>%
+  arrange(shiptocustomernumber)
+
+
+
+
+autonews_list%>%
+  mutate(arpu_copies=total_recognized_weekly_revenue/total_copies,
+         arpu_subs=total_recognized_weekly_revenue/distinct_subscriptions)
+
+
+
+
+write.csv(adage_list,"adage_list_jonathan.csv")
+write.csv(autonews_list,"an_list_jonathan.csv")
+```
+
+```{r}
+write.csv(mh_list,"mh_list_jonathan.csv")
+```
+
+
+```{r}
+reduced_list_city<-city_brand_table%>%
+  filter(donortype=="I")%>%
+  filter(subscriptionclass=="R")%>%
+  filter(termtype%in%c("P","C"))%>%
+  filter(expirationissuedate>=as.Date("2016-01-01",format="%Y-%m-%d"))
+
+ccl_table<-reduced_list_city%>%
+  filter(brand=="CL")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+
+ccb_table<-reduced_list_city%>%
+  filter(brand=="CB")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+
+cdb_table<-reduced_list_city%>%
+  filter(brand=="CD")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+
+cny_table<-reduced_list_city%>%
+  filter(brand=="CN")%>%
+  crossing(date_index)%>%
+  mutate(termlength=as.numeric(termlength))%>%
+  mutate(rate_per_day=((rate/termlength)/7)*copies)%>%
+  filter(rate>0)%>%
+  mutate(p_start_date=if_else(startissuedate<start_date,start_date,startissuedate),
+         p_end_date=if_else(expirationissuedate>end_date,end_date,expirationissuedate))%>%
+  mutate(total_days_this_week=as.numeric(difftime(p_end_date,p_start_date,units="days")))%>%
+  filter(total_days_this_week>0&total_days_this_week<=7)%>%
+  mutate(weekly_recognized_revenue=rate_per_day*total_days_this_week)%>%
+  group_by(start_date)%>%
+  summarise(total_recognized_weekly_revenue=sum(weekly_recognized_revenue),
+            distinct_contracts=n_distinct(paste(shiptocustomernumber,ordernumber,adv_subid)),
+            distinct_subscriptions=n_distinct(adv_subid),
+            total_copies=sum(copies)
+            )
+```
+
+```{r}
+ccl_table
+```
+
+```{r}
+cdb_table
+```
+
+```{r}
+mh_list%>%
+  ggplot(aes(start_date,total_copies))+geom_point()
+```
+
+```{r}
+test
+```
+
+
+
+
+
+
+
+
+
+
+

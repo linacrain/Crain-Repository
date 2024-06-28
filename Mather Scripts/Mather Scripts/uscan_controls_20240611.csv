@@ -1,0 +1,7 @@
+site_id,subscription_id,recommended_plan_id,businessunitcode,product_id,billing_method,pricing_source
+5110,1930496,31637,ANG,2195,send_invoice,MP
+5110,1931815,31637,ANG,2195,send_invoice,MP
+5110,1932330,31637,ANG,2195,send_invoice,MP
+5110,1938935,31637,ANG,2195,send_invoice,MP
+5110,1951668,31637,ANG,2195,send_invoice,MP
+5110,1957346,31472,ANG,2194,send_invoice,MP
