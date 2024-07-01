@@ -1,0 +1,1 @@
+{"frames":[{"func":"w_sim_df %>% filter(W_sim >= 3) %>% summarise(n = n())$n","file":"","line_number":0,"end_line_number":0,"character_number":0,"end_character_number":0}],"message":"Error in `$`(., summarise(n = n()), n) : \n  3 arguments passed to '$' which requires 2\n"}

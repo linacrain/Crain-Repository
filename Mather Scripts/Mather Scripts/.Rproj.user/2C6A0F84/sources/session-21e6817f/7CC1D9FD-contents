@@ -1,0 +1,51 @@
+---
+title: "Statistical Thinking Exercises HW 1"
+author: "Andrew Lin"
+date: "2024-06-28"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+1.)
+
+```{r}
+sim_globe<-function(p,n){
+  sample(c("W","L"),size=n,prob=c(p,1-p),replace=TRUE)
+}
+
+compute_posterior<-function(W,L,poss=c(0,0.25,0.5,0.75,1)){
+  ways<-sapply(poss,function(q)q^W*(1-q)^L)
+  post<-ways/sum(ways)
+  return(data.frame(post,ways,post=round(post,3)))
+}
+
+f<-compute_posterior(4,11,poss=seq(0,1,by=0.1))
+
+f
+```
+
+
+
+```{r}
+p_samples<-rbeta(1000,4+1,11+1)
+W_sim<-rbinom(1000,size=5,p_samples)
+
+w_sim_df<-as.data.frame(W_sim)
+number_of_ways_to_produce_3<-nrow(w_sim_df%>%
+  filter(W_sim>=3))
+
+total_ways<-nrow(w_sim_df)
+
+prob<-number_of_ways_to_produce_3/total_ways
+
+
+```
+
+
+
+
+
+

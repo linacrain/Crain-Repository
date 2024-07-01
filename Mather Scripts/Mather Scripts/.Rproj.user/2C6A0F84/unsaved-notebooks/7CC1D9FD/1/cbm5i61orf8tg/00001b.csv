@@ -1,0 +1,7 @@
+"0","number_of_ways_to_produce_3<-w_sim_df%>%
+  filter(W_sim>=3)%>%
+  summarise(n=n())$n
+"
+"2","Error in `$`(., summarise(n = n()), n) : 
+  3 arguments passed to '$' which requires 2
+"
