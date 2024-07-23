@@ -1,0 +1,131 @@
+---
+title: "AA RFV"
+author: "Andrew Lin"
+date: "2024-07-11"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library(ggplot2)
+library(cmdstanr)
+library(rstan)
+library(StanHeaders)
+library(rstantools)
+library(tidybayes)
+library(brms)
+library(scales)
+library(zoo)
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+```
+
+```{r}
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+clickshare_index_2<-dbGetQuery(prod,"select * from reporting.customer_master_reference where businessunitcode='AA'")
+sub_and_group_list<-clickshare_index_2%>%
+  group_by(customermasterkey)%>%
+  mutate(subscriber_check=ifelse(is.na(advantagecustomerid)&pelcrocustomerid==0,FALSE,TRUE))%>%
+  summarise(max_sub_check=max(subscriber_check),
+            max_group=max(isgroup))%>%
+  filter(max_sub_check==1&max_group==0)%>%
+  select(customermasterkey)%>%
+    distinct()%>%
+  mutate(is_sub_is_ind=TRUE)
+
+clickshare_index<-clickshare_index_2%>%
+  select(customermasterkey,visitorid,clickshareuserid,pelcrocustomerid,advantagecustomerid,isbadquality)%>%
+  mutate(pelcrocustomerid=as.double(pelcrocustomerid),
+         clickshareuserid=as.double(clickshareuserid))%>%
+  distinct()%>%
+  filter(customermasterkey%in%sub_and_group_list$customermasterkey)
+
+aa<-read_csv("AA_Engagement_CSV2.zip")
+
+clickshare_index%>%filter(visitorid=="1000712564246095574_9006501849975017688")
+
+clickshare_index%>%
+  filter(isbadquality==FALSE)%>%
+  group_by(visitorid)%>%
+  mutate(n=n_distinct(customermasterkey))%>%
+  filter(n>1)%>%
+  arrange(visitorid)
+```
+
+
+```{r}
+test<-aa%>%
+  head(100)
+
+aa_date_filtered<-aa[as.Date(aa$Date,format="%B %d, %Y")<=as.Date("2023-05-31",format="%Y-%m-%d")|as.Date(aa$Date,format="%B %d, %Y")>=as.Date("2024-01-01",format="%Y-%m-%d"),]
+
+aa_date_joined_with_clickshare<-aa_date_filtered%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="visitorid"))
+
+aa_date_filtered_no_na<-aa_date_joined_with_clickshare[complete.cases(aa_date_joined_with_clickshare[,c('customermasterkey','clickshareuserid','pelcrocustomerid')]),]
+
+  
+
+rolled_up_visits<-aa_date_filtered%>%
+  group_by(Visitor_ID,`Visit Number`,Date)%>%
+  arrange(`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  mutate(clicks_to_article=ifelse(`Content Type (v31) (evar31)`=="article",`Clicks to Page`,NA))%>%
+  mutate(did_sub=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:subscribe:")&!is.na(`Page Name (v6) (evar6)`),1,0))%>%
+  summarise(n_articles_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`=="article",`Page Name (v6) (evar6)`,NA),na.rm=TRUE),
+            n_clicks_to_article=min(clicks_to_article,na.rm=TRUE),
+            did_subscribe_during_visit=max(did_sub,na.rm=TRUE),
+            n_non_article_pages_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`!="article"|is.na(`Content Type (v31) (evar31)`),`Page Name (v6) (evar6)`,NA),na.rm=TRUE))
+
+write.csv(rolled_up_visits,"aa_rolled_up_visits.csv")
+  
+
+aa_rolled_up<-aa%>%
+  mutate(`UID All (v60) (evar60)`=as.numeric(ifelse(`UID All (v60) (evar60)`==''|`UID All (v60) (evar60)`=="NO_ID",NA,`UID All (v60) (evar60)`)))%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="visitorid"))%>%
+  filter(!is.na(customermasterkey)&!is.na(clickshareuserid)&!is.na(pelcrocustomerid))%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(ref_id=customermasterkey)%>%
+  select(ref_id,Date,Visitor_ID,`Visit Number`,`Clicks to Page`,`Content Type (v31) (evar31)`,`Page Name (v6) (evar6)`,content_type)%>%
+  group_by(ref_id,Visitor_ID,`Visit Number`,Date)%>%
+  arrange(`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  mutate(clicks_to_article=ifelse(`Content Type (v31) (evar31)`=="article",`Clicks to Page`,NA))%>%
+  mutate(did_sub=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:subscribe:")&!is.na(`Page Name (v6) (evar6)`),1,0))%>%
+  summarise(n_articles_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`=="article",`Page Name (v6) (evar6)`,NA),na.rm=TRUE),
+            n_clicks_to_article=min(clicks_to_article,na.rm=TRUE),
+            did_subscribe_during_visit=max(did_sub,na.rm=TRUE),
+            n_non_article_pages_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`!="article"|is.na(`Content Type (v31) (evar31)`),`Page Name (v6) (evar6)`,NA),na.rm=TRUE))%>%
+  mutate(ref_id=ifelse(is.infinite(ref_id),NA,ref_id),
+         n_clicks_to_article=ifelse(is.infinite(n_clicks_to_article),NA,n_clicks_to_article))%>%
+  left_join(sub_and_group_list,by=c("ref_id"="customermasterkey"))%>%
+  filter(!is.na(is_sub_is_ind))
+
+write.csv(aa_rolled_up,"aa_rolled_up_cleaned.csv")
+
+rolled_up_visits%>%
+  head(1000)%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="visitorid"))%>%
+  group_by(Visitor_ID)%>%
+  summarise(n=n_distinct(customermasterkey))%>%
+  filter(n>1)
+  filter(customermasterkey%in%sub_and_group_list$customermasterkey)
+```
+
+
+
+
+
+
+
+
+

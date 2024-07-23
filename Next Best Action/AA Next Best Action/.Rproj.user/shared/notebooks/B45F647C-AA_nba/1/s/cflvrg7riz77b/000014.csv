@@ -1,0 +1,8 @@
+"0","post_data_2%>%
+  group_by(uid_max,visitor_access_level,total_days,other.web.sites,search.engines,social.networks,typed_bookmarked,product,last_touch_referrer,.prediction)%>%
+  summarise(n=n_distinct(.draw))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'uid_max', 'visitor_access_level', 'total_days', 'other.web.sites',
+'search.engines', 'social.networks', 'typed_bookmarked', 'product', 'last_touch_referrer'. You can override using the
+`.groups` argument.[39m
+"

@@ -1,0 +1,39 @@
+"0","last_touch_info<-AN_aggregated%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  group_by(uid_max)%>%"
+"0","  arrange(Date,Visit.Number,Clicks.to.Page,.by_group=TRUE)%>%"
+"0","  filter(nrow==order_row_number)%>%"
+"0","  select(uid_max,Purchase.IDs,Referrer.Type)%>%"
+"0","  distinct()"
+"0",""
+"0","last_touch_info_2<-AN_aggregated%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  group_by(uid_max)%>%"
+"0","  arrange(Date,Visit.Number,Clicks.to.Page,.by_group=TRUE)%>%"
+"0","  filter(nrow==order_row_number)%>%"
+"0","  select(uid_max,Date)%>%"
+"0","  mutate(uid_max=as.double(uid_max))%>%"
+"0","  filter(!is.na(uid_max))%>%"
+"0","  distinct()"
+"2","Warning:"
+"2"," [38;5;232mThere were 903 warnings in `mutate()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `uid_max = as.double(uid_max)`.
+[36mℹ[38;5;232m In group 14: `uid_max = ""1020503190594017987_4982699725596114558""`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 902 remaining warnings.[39m
+"
+"0","order_info_an<-an_adv%>%"
+"0","  filter(owningoffice==""AN"")%>%"
+"0","  filter(startissuedate>=as.Date(""2023-01-01"")|is.na(startissuedate))%>%"
+"0","  select(ordernumber,publicationcode,termlength)%>%"
+"0","  distinct()%>%"
+"0","  group_by(ordernumber)%>%"
+"0","  mutate(n=n_distinct(publicationcode))"
+"0",""
+"0","pelcro_info_an<-an_pelcro%>%"
+"0","  select(shiptocustomernumber,invoiceid,subscriptionid,termlength,pubcode,orderdate)%>%"
+"0","  distinct()%>%"
+"0","  mutate(shiptocustomernumber=str_replace_all(shiptocustomernumber,""[^0-9.-]"",""""))%>%"
+"0","  mutate(shiptocustomernumber=as.double(shiptocustomernumber))"

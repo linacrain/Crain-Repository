@@ -1,0 +1,18 @@
+"0","fit_zinb2<-brm(
+  bf(mean_days_between_visits ~ time_period+0,
+     hu~time_period+0),
+  data = mean_days_between_visits,
+  family=hurdle_lognormal(),
+  prior=c(prior(normal(0,10),class=""b""),
+           prior(normal(0,10),class=""b"",dpar=""hu""),
+          prior(normal(0,10),class=""sigma"")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+"
+"2","Compiling Stan program...
+"
+"2","Start sampling
+"

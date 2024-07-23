@@ -1,0 +1,11 @@
+"0","full_an_set%>%
+  mutate(total_day_category=ifelse(total_days==1,""One Day"",
+                                   ifelse(total_days>1&total_days<=5,""2 - 5 Days"",""6 Days +"")))%>%
+  mutate(total_day_category=factor(total_day_category,levels=c(""One Day"",""2 - 5 Days"",""6 Days +"")))%>%
+  group_by(visitor_access_level,total_day_category,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  ggplot(aes(total_day_category,y=n,color=product,group=product))+geom_point()+geom_line()+facet_wrap(~visitor_access_level)
+"
+"1","[38;5;232m`summarise()` has grouped output by 'visitor_access_level', 'total_day_category'. You can override using the `.groups`
+argument.[39m
+"

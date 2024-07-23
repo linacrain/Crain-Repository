@@ -1,0 +1,11 @@
+"0","articles_per_week%>%
+  ggplot(aes(articles_per_week,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(0,20))
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 206 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

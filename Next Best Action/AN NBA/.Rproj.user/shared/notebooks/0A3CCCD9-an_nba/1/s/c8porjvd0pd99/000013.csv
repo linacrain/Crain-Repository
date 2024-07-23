@@ -1,0 +1,19 @@
+"0","full_an_set%>%
+  mutate(
+         `other.web.sites`=ifelse(last_touch_referrer==""other web sites"",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(last_touch_referrer==""search engines"",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(last_touch_referrer==""social networks"",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer==""typed/bookmarked"",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,""missing"",
+                              ifelse(`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  group_by(channel_level,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  ggplot(aes(channel_level,prop,fill=product))+geom_bar(stat=""identity"",position=""dodge"")+theme_minimal()+coord_flip()+labs(x=""Channel Segment"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'channel_level'. You can override using the `.groups` argument.[39m
+"

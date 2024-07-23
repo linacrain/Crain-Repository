@@ -1,0 +1,692 @@
+---
+title: "Updated MH RFV Outputs"
+author: "Andrew Lin"
+date: "2024-07-10"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library(ggplot2)
+library(cmdstanr)
+library(rstan)
+library(StanHeaders)
+library(rstantools)
+library(tidybayes)
+library(brms)
+library(scales)
+library(zoo)
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+```
+
+```{r}
+mh <- read_csv("MH_Engagement_CSV_2.zip")
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+clickshare_index2<-dbGetQuery(prod,"select * from reporting.customer_master_reference where businessunitcode='MH'")
+clickshare_index<-clickshare_index2%>%
+  select(customermasterkey,visitorid,clickshareuserid,pelcrocustomerid,advantagecustomerid)%>%
+  mutate(pelcrocustomerid=as.double(pelcrocustomerid),
+         clickshareuserid=as.double(clickshareuserid))%>%
+  distinct()
+
+Clickshare_Mapping_to_Pelcro_IDs
+clickshare_index%>%
+  filter(clickshareuserid==1)
+
+sub_and_group_list<-clickshare_index2%>%
+  group_by(customermasterkey)%>%
+  mutate(subscriber_check=ifelse(is.na(advantagecustomerid)&pelcrocustomerid==0,FALSE,TRUE))%>%
+  summarise(max_sub_check=max(subscriber_check),
+            max_group=max(isgroup))%>%
+  filter(max_sub_check==1&max_group==0)%>%
+  select(customermasterkey)%>%
+    distinct()%>%
+  mutate(is_sub_is_ind=TRUE)
+
+mh_adv<-dbGetQuery(prod,statement=read_file("mh_test.sql"))
+
+clickshare_index_reduced<-clickshare_index%>%
+  filter(customermasterkey%in%sub_and_group_list$customermasterkey)%>%
+  select(customermasterkey,clickshareuserid)%>%
+  distinct()
+```
+
+
+
+`
+
+
+
+```{r}
+mh_date_reduced<-mh[as.Date(mh$Date,format="%B %d, %Y")<=as.Date("2023-05-31",format="%Y-%m-%d")|as.Date(mh$Date,format="%B %d, %Y")>=as.Date("2024-01-01",format="%Y-%m-%d"),]
+
+rolled_up_mh<-mh_date_reduced%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(`UID All (v60) (evar60)`=as.numeric(ifelse(`UID All (v60) (evar60)`==''|`UID All (v60) (evar60)`=="NO_ID",NA,`UID All (v60) (evar60)`)))%>%
+  group_by(Visitor_ID,`Visit Number`)%>%
+  mutate(uid_max=max(`UID All (v60) (evar60)`,na.rm=TRUE))%>%
+  left_join(clickshare_index_reduced,by=c("uid_max"="clickshareuserid"))%>%
+  filter(!is.na(customermasterkey))%>%
+  mutate(ref_id=customermasterkey)%>%
+  group_by(ref_id)%>%
+  arrange(Date,`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  select(ref_id,Date,Visitor_ID,`Visit Number`,`Clicks to Page`,`Content Type (v31) (evar31)`,`Page Name (v6) (evar6)`,`Mobile Device Type`)%>%
+  group_by(ref_id,Visitor_ID,`Visit Number`,Date,`Mobile Device Type`)%>%
+  arrange(`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  mutate(clicks_to_article=ifelse(`Content Type (v31) (evar31)`=="article",`Clicks to Page`,NA))%>%
+  mutate(did_sub=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:subscribe:")&!is.na(`Page Name (v6) (evar6)`),1,0))%>%
+  summarise(n_articles_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`=="article",`Page Name (v6) (evar6)`,NA),na.rm=TRUE),
+            n_clicks_to_article=min(clicks_to_article,na.rm=TRUE),
+            did_subscribe_during_visit=max(did_sub,na.rm=TRUE),
+            n_non_article_pages_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`!="article"|is.na(`Content Type (v31) (evar31)`),`Page Name (v6) (evar6)`,NA),na.rm=TRUE))%>%
+  mutate(ref_id=ifelse(is.infinite(ref_id),NA,ref_id),
+         n_clicks_to_article=ifelse(is.infinite(n_clicks_to_article),NA,n_clicks_to_article))
+
+write.csv(rolled_up_mh,"rolled_up_mh_uid_join.csv")
+
+#mh_cleaned
+#write.csv(mh_cleaned,"mh_rolled_up_customermaster_key_cleaned.csv")
+#mh_cleaned<-read.csv("mh_rolled_up_customermaster_key_cleaned.csv")
+
+#further_cleaned_mh<-mh_cleaned%>%
+  #left_join(sub_and_group_list,by=c("ref_id"="customermasterkey"))%>%
+  #filter(!is.na(is_sub_is_ind))
+
+further_cleaned_mh<-rolled_up_mh
+
+rolled_up_mh
+```
+
+Share of Subscribers that Visited the Site
+```{r}
+mh_2023_active_sub_count<-(mh_adv%>%
+  filter(startissuedate<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  filter(expirationissuedate>=as.Date("2023-01-01",format="%Y-%m-%d"))%>%
+  filter(donortype=="I")%>%
+  summarise(n=n_distinct(shiptocustomernumber)))$n
+
+mh_2024_active_sub_count<-(mh_adv%>%
+  filter(startissuedate<=as.Date("2024-05-31",format="%Y-%m-%d"))%>%
+  filter(expirationissuedate>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  filter(donortype=="I")%>%
+  summarise(n=n_distinct(shiptocustomernumber)))$n
+
+active_sub_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  summarise(n=n_distinct(ref_id))
+
+active_sub_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  summarise(n=n_distinct(ref_id))
+
+active_subs<-rbind(active_sub_2023,active_sub_2024)
+
+active_subs_table<-active_subs%>%
+  mutate(total_subs=ifelse(time_period=="2023 Jan 1st to May 31st",mh_2023_active_sub_count,mh_2024_active_sub_count))
+
+active_subs_bar<-active_subs%>%
+  mutate(total_subs=ifelse(time_period=="2023 Jan 1st to May 31st",mh_2023_active_sub_count,mh_2024_active_sub_count))%>%
+  mutate(prop=round(n/total_subs*100,2))%>%
+  ggplot(aes(time_period,prop,fill=time_period))+geom_bar(stat="identity",position="dodge")+geom_text(aes(label=paste(prop,"%",sep=""),vjust=-0.3),size=3)+theme_minimal()+xlab("")+ylab("Proportion of Subscriber Base")+labs(title="Proportion of Subscriber Base that Visited the MH Site by Year")+guides(fill="none")
+```
+```{r}
+gc()
+share_active_subs_beta_binomial <- brm(
+  bf(n | trials(total_subs) ~ 0 + time_period),
+  data = active_subs_table,
+  family = binomial(link = "identity"),
+  prior = c(prior(beta(1, 1), class = "b", dpar = "mu", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+
+saveRDS(share_active_subs_beta_binomial,"share_active_subs_beta_binomial.RDS")
+```
+```{r}
+summary(share_active_subs_beta_binomial)
+```
+```{r}
+
+
+post_share_active<-posterior_samples(share_active_subs_beta_binomial)
+
+
+difference_in_perc_share_active<-post_share_active%>%
+  mutate(diff=b_time_period2024Jan1sttoMay31st*100-b_time_period2023Jan1sttoMay31st*100)%>%
+  mutate(diff=round(diff,1))%>%
+  mutate(mean_diff=mean(diff))%>%
+  ggplot(aes(x=diff))+geom_histogram(fill="lightblue")+theme_minimal()+geom_vline(xintercept=6,color="black",linetype="dashed")+ylab("")+xlab("Difference in % Points between 2024 and 2023")+geom_text(x=6.2,y=500,label="Expected. Diff in %:\n                 6%",hjust=-0.4)
+
+
+
+ggarrange(active_subs_bar,difference_in_perc_share_active,ncol=1,nrow=2,common.legend = TRUE)
+```
+```{r}
+hypothesis(share_active_subs_beta_binomial,"time_period2024Jan1sttoMay31st*100-time_period2023Jan1sttoMay31st*100>0")
+
+prop.test(x=c(14597,15452),n=c(20638,21548),alt="l")
+```
+
+```{r}
+adv_total_active_subs_2023<-mh_adv%>%
+  filter(startissuedate<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  filter(expirationissuedate>=as.Date("2023-01-01",format="%Y-%m-%d"))%>%
+  filter(donortype=="I")%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(is_active_1=ifelse(startissuedate<=as.Date("2023-01-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_2=ifelse(startissuedate<=as.Date("2023-02-28",format="%Y-%m-%d")&expirationissuedate>as.Date("2023-01-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_3=ifelse(startissuedate<=as.Date("2023-03-31",format="%Y-%m-%d")&expirationissuedate>as.Date("2023-02-28",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_4=ifelse(startissuedate<=as.Date("2023-04-30",format="%Y-%m-%d")&expirationissuedate>as.Date("2023-03-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_5=ifelse(startissuedate<=as.Date("2023-05-31",format="%Y-%m-%d")&expirationissuedate>as.Date("2023-04-30",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  ungroup()%>%
+  group_by(shiptocustomernumber)%>%
+  summarise(is_active_1=max(is_active_1),
+            is_active_2=max(is_active_2),
+            is_active_3=max(is_active_3),
+            is_active_4=max(is_active_4),
+            is_active_5=max(is_active_5))%>%
+  gather(key="month",value="was_active",is_active_1:is_active_5)%>%
+  group_by(month)%>%
+  summarise(n_active_subs=n_distinct(ifelse(was_active==1,shiptocustomernumber,NA),na.rm=TRUE))%>%
+  mutate(month=ifelse(month=="is_active_1",1,
+                      ifelse(month=="is_active_2",2,
+                             ifelse(month=="is_active_3",3,
+                                    ifelse(month=="is_active_4",4,5)))))
+
+adv_total_active_subs_2024<-mh_adv%>%
+  filter(startissuedate<=as.Date("2024-05-31",format="%Y-%m-%d"))%>%
+  filter(expirationissuedate>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  filter(donortype=="I")%>%
+  group_by(shiptocustomernumber,ordernumber)%>%
+  mutate(is_active_1=ifelse(startissuedate<=as.Date("2024-01-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_2=ifelse(startissuedate<=as.Date("2024-02-29",format="%Y-%m-%d")&expirationissuedate>as.Date("2024-01-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_3=ifelse(startissuedate<=as.Date("2024-03-31",format="%Y-%m-%d")&expirationissuedate>as.Date("2024-02-28",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_4=ifelse(startissuedate<=as.Date("2024-04-30",format="%Y-%m-%d")&expirationissuedate>as.Date("2024-03-31",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  mutate(is_active_5=ifelse(startissuedate<=as.Date("2024-05-31",format="%Y-%m-%d")&expirationissuedate>as.Date("2024-04-30",format="%Y-%m-%d"),TRUE,FALSE))%>%
+  ungroup()%>%
+  group_by(shiptocustomernumber)%>%
+  summarise(is_active_1=max(is_active_1),
+            is_active_2=max(is_active_2),
+            is_active_3=max(is_active_3),
+            is_active_4=max(is_active_4),
+            is_active_5=max(is_active_5))%>%
+  gather(key="month",value="was_active",is_active_1:is_active_5)%>%
+  group_by(month)%>%
+  summarise(n_active_subs=n_distinct(ifelse(was_active==1,shiptocustomernumber,NA),na.rm=TRUE))%>%
+  mutate(month=ifelse(month=="is_active_1",1,
+                      ifelse(month=="is_active_2",2,
+                             ifelse(month=="is_active_3",3,
+                                    ifelse(month=="is_active_4",4,5)))))
+```
+
+
+```{r}
+segment_information_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n_visitors=n_distinct(ref_id))%>%
+  left_join(adv_total_active_subs_2023,by=c("month"="month"))
+
+
+segment_information_2023%>%
+  group_by(month)%>%
+  mutate(total_visitors=sum(n_visitors))%>%
+  mutate()
+```
+```{r}
+month<-c(1,2,3,4,5)
+year<-c(2023,2023,2023,2023,2023)
+visit_segment<-c("Inactive","Inactive","Inactive","Inactive","Inactive")
+n_visitors<-c(16542-7734,16327-7530,16331-8191,16325-7672,16384-8326)
+n_active_subs<-c(16542,16327,16331,16325,16384)
+total_visitors<-c(10651,10558,11520,11022,12005)
+
+inactive_rows_2023<-data.frame(month,year,visit_segment,n_visitors,n_active_subs,total_visitors)
+segmentation_2023<-segment_information_2023%>%
+  rbind(inactive_rows_2023)%>%
+  arrange(month)%>%
+  mutate(prop=round(n_visitors/n_active_subs*100,2))%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  mutate(`Proportion of Active Subscribers`=prop)%>%
+  ggplot(aes(Month,`Proportion of Active Subscribers`,fill=visit_segment))+geom_bar(stat="identity")+geom_text(aes(label=paste(prop,"%",sep="")),size=3,position=position_stack(vjust=0.6))+theme_minimal()+scale_fill_manual(values=c("Brand Lover"="lightblue","Loyal Reader"="lightgreen","Casual Reader"="pink","Inactive"="grey"))+xlab("Month(2023)")+guides(fill="none")
+
+```
+
+```{r,fig.width=10}
+adv_total_active_subs_2024
+
+segment_information_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  mutate(end_date=if_else(month==1,as.Date("2023-01-31","%Y-%m-%d"),
+                          if_else(month==2,as.Date("2023-02-28","%Y-%m-%d"),
+                                  if_else(month==3,as.Date("2023-03-31","%Y-%m-%d"),
+                                          if_else(month==4,as.Date("2023-04-30","%Y-%m-%d"),as.Date("2023-05-31","%Y-%m-%d"))))))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n_visitors=n_distinct(ref_id))%>%
+  left_join(adv_total_active_subs_2024,by=c("month"="month"))
+
+segment_information_2024%>%
+  group_by(month)%>%
+  mutate(total_visitors=sum(n_visitors))
+
+month_2<-c(1,2,3,4,5)
+year_2<-c(2024,2024,2024,2024,2024)
+visit_segment_2<-c("Inactive","Inactive","Inactive","Inactive","Inactive")
+n_visitors_2<-c(17163-9720,17279-9704,17320-9666,17472-9723,17378-9625)
+n_active_subs_2<-c(17163,17279,17320,17472,17378)
+total_visitors_2<-c(14471,14398,15471,14665,14650)
+
+inactive_rows_2024<-data.frame(month_2,year_2,visit_segment_2,n_visitors_2,n_active_subs_2,total_visitors_2)%>%
+  mutate(month=month_2,
+         year=year_2,
+         visit_segment=visit_segment_2,
+         n_visitors=n_visitors_2,
+         n_active_subs=n_active_subs_2)%>%
+  select(-c(month_2,year_2,visit_segment_2,n_visitors_2,n_active_subs_2,total_visitors_2))
+
+segmentation_2024<-segment_information_2024%>%
+  ungroup()%>%
+  rbind(inactive_rows_2024)%>%
+  ungroup()%>%
+  arrange(month)%>%
+  mutate(prop=round(n_visitors/n_active_subs*100,2))%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(`Proportion of Active Subscribers`=prop)%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  ggplot(aes(Month,`Proportion of Active Subscribers`,fill=visit_segment))+geom_bar(stat="identity")+geom_text(aes(label=paste(prop,"%",sep="")),size=3,position=position_stack(vjust=0.6))+theme_minimal()+scale_fill_manual(values=c("Brand Lover"="lightblue","Loyal Reader"="lightgreen","Casual Reader"="pink","Inactive"="grey"))+xlab("Month(2024)")+ylab("")+labs(fill="Visit Segment")
+
+ggarrange(segmentation_2023,segmentation_2024,ncol=2,nrow=1,widths=c(3,3),common.legend=TRUE)
+```
+
+```{r}
+segment_article_per_day_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  mutate(end_date=if_else(month==1,as.Date("2023-01-31","%Y-%m-%d"),
+                          if_else(month==2,as.Date("2023-02-28","%Y-%m-%d"),
+                                  if_else(month==3,as.Date("2023-03-31","%Y-%m-%d"),
+                                          if_else(month==4,as.Date("2023-04-30","%Y-%m-%d"),as.Date("2023-05-31","%Y-%m-%d"))))))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))%>%
+  ungroup()%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n=mean(articles_per_day))
+
+
+segment_article_per_day_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  mutate(end_date=if_else(month==1,as.Date("2023-01-31","%Y-%m-%d"),
+                          if_else(month==2,as.Date("2023-02-28","%Y-%m-%d"),
+                                  if_else(month==3,as.Date("2023-03-31","%Y-%m-%d"),
+                                          if_else(month==4,as.Date("2023-04-30","%Y-%m-%d"),as.Date("2023-05-31","%Y-%m-%d"))))))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))%>%
+  ungroup()%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n=mean(articles_per_day))
+
+
+segment_article_per_day<-rbind(segment_article_per_day_2023,segment_article_per_day_2024)
+
+segment_article_per_day%>%
+  mutate(Year=as.factor(year))%>%
+  ggplot(aes(month,n,color=Year,linetype=visit_segment,shape=visit_segment))+geom_point()+theme_minimal()+geom_line()+xlab("Month")+ylab("Avg. Articles Per Day Per User")+geom_text(aes(label=round(n,1)),size=2.5,position=position_dodge2(width=0.3),vjust=-0.3)
+  
+```
+```{r}
+segment_article_per_day_2023_ungrouped<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  mutate(end_date=if_else(month==1,as.Date("2023-01-31","%Y-%m-%d"),
+                          if_else(month==2,as.Date("2023-02-28","%Y-%m-%d"),
+                                  if_else(month==3,as.Date("2023-03-31","%Y-%m-%d"),
+                                          if_else(month==4,as.Date("2023-04-30","%Y-%m-%d"),as.Date("2023-05-31","%Y-%m-%d"))))))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))
+
+segment_article_per_day_2024_ungrouped<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  mutate(end_date=if_else(month==1,as.Date("2023-01-31","%Y-%m-%d"),
+                          if_else(month==2,as.Date("2023-02-28","%Y-%m-%d"),
+                                  if_else(month==3,as.Date("2023-03-31","%Y-%m-%d"),
+                                          if_else(month==4,as.Date("2023-04-30","%Y-%m-%d"),as.Date("2023-05-31","%Y-%m-%d"))))))%>%
+  group_by(ref_id,month,year,end_date)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))
+
+segment_article_per_day_ungrouped<-rbind(segment_article_per_day_2023_ungrouped,segment_article_per_day_2024_ungrouped)
+```
+
+```{r}
+segment_article_per_day_ungrouped%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  ggplot(aes(Month,articles_per_day))+geom_violin(aes(fill=as.factor(year)),draw_quantiles=(0.5))+theme_minimal()+facet_wrap(~visit_segment)+coord_flip()+ylim(c(0,5))
+```
+
+```{r}
+total_articles_by_month_segment_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  group_by(ref_id,month,year)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  filter(n_articles>0)
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))%>%
+  ungroup()%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n=mean(articles_per_day))
+
+
+total_articles_by_month_segment_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(time_period)%>%
+  mutate(month=month(Date),
+         year=year(Date))%>%
+  group_by(ref_id,month,year)%>%
+  summarise(n_visits=n_distinct(Date),
+            n_articles=sum(n_articles_visited))%>%
+  filter(n_articles>0)
+  ungroup()%>%
+  mutate(visit_segment=ifelse(n_visits==0,"inactive",
+                              ifelse(n_visits<2,"Casual Reader",
+                                     ifelse(n_visits>=2&n_visits<=14,"Loyal Reader","Brand Lover"))))%>%
+  mutate(articles_per_day=round(n_articles/n_visits,2))%>%
+  ungroup()%>%
+  group_by(month,year,visit_segment)%>%
+  summarise(n=mean(articles_per_day))
+
+total_articles_by_month_segment_2023%>%
+  rbind(total_articles_by_month_segment_2024)%>%
+  group_by(n_articles)%>%
+  summarise(n=n_distinct(ref_id))%>%
+  ungroup()%>%
+  mutate(total=sum(n))%>%
+  mutate(share=n/total*100)%>%
+  mutate(cumulative_sum=cumsum(n))%>%
+  mutate(cdf=cumulative_sum/total*100)
+
+summary(total_arti)
+```
+
+```{r}
+article_segment_2023<-total_articles_by_month_segment_2023%>%
+  rbind(total_articles_by_month_segment_2024)%>%
+  mutate(article_segment=ifelse(n_articles<=2,"1 - 2 Articles",
+                                ifelse(n_articles>2&n_articles<=5,"3-5 Articles",
+                                       ifelse(n_articles>5&n_articles<=12,"5-12 Articles","13+ Articles"))))%>%
+  filter(year==2023)%>%
+  group_by(month,article_segment)%>%
+  summarise(n_users=n_distinct(ref_id))%>%
+  mutate(total_users=sum(n_users))%>%
+  mutate(share=n_users/total_users*100)%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(`Proportion of Active Subscribers`=share)%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  mutate(article_segment=factor(article_segment,levels=c("1 - 2 Articles","3-5 Articles","5-12 Articles","13+ Articles")))%>%
+  ggplot(aes(Month,`Proportion of Active Subscribers`,fill=article_segment))+geom_bar(stat="identity")+geom_text(aes(label=paste(round(share,1),"%",sep="")),size=3,position=position_stack(vjust=0.6))+theme_minimal()+scale_fill_manual(values=c("13+ Articles"="lightblue","5-12 Articles"="lightgreen","3-5 Articles"="pink","1 - 2 Articles"="grey"))+xlab("Month(2023)")+ylab("")+labs(fill="Article Segment")
+
+article_segment_2024<-total_articles_by_month_segment_2023%>%
+  rbind(total_articles_by_month_segment_2024)%>%
+  mutate(article_segment=ifelse(n_articles<=2,"1 - 2 Articles",
+                                ifelse(n_articles>2&n_articles<=5,"3-5 Articles",
+                                       ifelse(n_articles>5&n_articles<=12,"5-12 Articles","13+ Articles"))))%>%
+  filter(year==2024)%>%
+  group_by(month,article_segment)%>%
+  summarise(n_users=n_distinct(ref_id))%>%
+  mutate(total_users=sum(n_users))%>%
+  mutate(share=n_users/total_users*100)%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(`Proportion of Active Subscribers`=share)%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  mutate(article_segment=factor(article_segment,levels=c("1 - 2 Articles","3-5 Articles","5-12 Articles","13+ Articles")))%>%
+  ggplot(aes(Month,`Proportion of Active Subscribers`,fill=article_segment))+geom_bar(stat="identity")+geom_text(aes(label=paste(round(share,1),"%",sep="")),size=3,position=position_stack(vjust=0.6))+theme_minimal()+scale_fill_manual(values=c("13+ Articles"="lightblue","5-12 Articles"="lightgreen","3-5 Articles"="pink","1 - 2 Articles"="grey"))+xlab("Month(2024)")+ylab("")+labs(fill="Article Segment")
+
+avg_articles_per_user_per_month<-total_articles_by_month_segment_2023%>%
+  rbind(total_articles_by_month_segment_2024)%>%
+  group_by(month,year)%>%
+  summarise(mean_articles=round(mean(n_articles),1))%>%
+  mutate(Month=month.abb[(month)])%>%
+  mutate(year=factor(year))%>%
+  mutate(Month=factor(Month,levels=c("Jan","Feb","Mar","Apr","May")))%>%
+  ggplot(aes(Month,mean_articles,fill=year))+geom_bar(stat="identity",position="dodge")+geom_text(aes(label=mean_articles),size=3,position=position_dodge(width=0.9),vjust=-0.3)+theme_minimal()+ylab("Avg. Articles Per User Per Month")+labs(fill="Year")+xlab("")
+
+avg_articles_per_user_per_month
+
+ggarrange(ggarrange(article_segment_2023,article_segment_2024,ncol=2,nrow=1,widths=c(3,3),common.legend=TRUE),avg_articles_per_user_per_month,ncol=1,nrow=2)
+```
+
+
+
+
+```{r}
+active_days_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(n=n_distinct(Date))
+  
+active_days_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(n=n_distinct(Date,na.rm=TRUE))
+
+active_days<-rbind(active_days_2023,active_days_2024)
+
+active_days_histogram<-active_days%>%
+  ggplot(aes(n,fill=time_period))+geom_histogram(alpha=0.2,position="identity")+theme_minimal()+scale_fill_manual(values = c("2023 Jan 1st to May 31st" = "red", "2024 Jan 1st to May 31st" = "blue"))+geom_vline(xintercept = 14.20,color="red",linetype="dashed")+geom_vline(xintercept = 17.41,color="blue",linetype="dashed")+xlim(c(0,100))+ylab("")+xlab("Active Days")+geom_text(x=19.158,y=3000,label=paste("2024 Mean: 17.41 Days"),size=4,hjust=-0.2,color="blue")+
+  geom_text(x=19.158,y=2000,label=paste("2023 Mean: 14.20 Days"),size=4,hjust=-0.2,color="red")+guides(fill="none")
+```
+```{r}
+active_days_boxplot<-active_days%>%
+  ggplot(aes(time_period,n,fill=time_period))+geom_boxplot(outliers=FALSE)+theme_minimal()+coord_flip()+ylab("Active Days")+xlab("")
+
+active_days%>%
+  group_by(time_period)%>%
+  summarise(mean=mean(n),
+            var=var(n))
+```
+```{r}
+t.test(n~time_period,data=active_days,var.equal=FALSE)
+```
+```{r}
+gc()
+active_days_model_unequal_variance <- brm(bf(n~time_period+0),
+                                          family=negbinomial(),
+  prior=c(
+          prior(normal(10,9),class="b",lb=0,ub=150),
+          prior(gamma(1,0.5),class="shape")),                                       
+  data = active_days,
+  cores = 4,
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED
+)
+saveRDS(active_days_model_unequal_variance,"active_days_model_negative_binomial.rds")
+
+
+summary(active_days_model_unequal_variance)
+```
+```{r}
+pp_check(active_days_model_unequal_variance,ndraws=100)+ggplot2::xlim(0,100)
+```
+```{r}
+mfx_neg_binom<-marginal_effects(active_days_model_unequal_variance,type="response")
+
+post<-posterior_samples(active_days_model_unequal_variance)
+
+post%>%
+  head(4000)%>%
+  mutate(exp_2023=exp(b_time_period2023Jan1sttoMay31st),
+         exp_2024=exp(b_time_period2024Jan1sttoMay31st))%>%
+  mutate(diff=exp_2024-exp_2023)%>%
+  summary(diff)
+
+difference_in_means<-post%>%
+  head(4000)%>%
+  mutate(exp_2023=exp(b_time_period2023Jan1sttoMay31st),
+         exp_2024=exp(b_time_period2024Jan1sttoMay31st))%>%
+  mutate(diff=exp_2024-exp_2023)%>%
+  ggplot(aes(x=diff))+geom_histogram(fill="lightblue")+theme_minimal()+geom_vline(xintercept=3.2,color="black",linetype="dashed")+ylab("")+xlab("Difference in Total Active Days between 2024 and 2023")+geom_text(x=3.3,y=300,label=paste("Expected. Diff in Active Days: ",paste(3.2,"Days",sep=" "),sep="\n                "),hjust=-0.01)
+```
+
+
+```{r}
+ggarrange(ggarrange(active_days_histogram,active_days_boxplot,nrow=1,ncol=2,common.legend=TRUE),difference_in_means,nrow=2)
+```
+
+
+```{r}
+articles_per_day_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+    summarise(total_articles=sum(n_articles_visited),
+            n_article_days=n_distinct(if_else(n_articles_visited>0,Date,NA),NA))
+  
+articles_per_day_2024<-further_cleaned_mh%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(total_articles=sum(n_articles_visited),
+            n_article_days=n_distinct(if_else(n_articles_visited>0,Date,NA),NA))
+
+articles_per_day<-rbind(articles_per_day_2023,articles_per_day_2024)%>%
+  filter(total_articles!=0)%>%
+  mutate(articles_per_day=total_articles/n_article_days)
+
+articles_per_day%>%
+  group_by(time_period)%>%
+  summarise(mean=mean(articles_per_day),
+            var=var(articles_per_day))
+  
+
+articles_per_day%>%
+  ggplot(aes(articles_per_day,fill=time_period))+geom_histogram(alpha=0.2,position="identity")+theme_minimal()+xlim(c(0,7.5))+guides(fill="none")+xlab("Articles Per Day")+geom_vline(xintercept=1.486,color="red",linetype="dashed")+geom_vline(xintercept=1.708,color="blue",linetype="dashed")
+```
+```{r}
+articles_read_per_day_2023<-further_cleaned_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  group_by(Date,time_period)%>%
+  summarise(total_articles=sum(n_articles_visited))%>%
+  mutate(day_of_week=weekdays(Date))%>%
+  mutate(is_weekend=ifelse(day_of_week=="Saturday"|day_of_week=="Sunday",TRUE,FALSE))
+
+articles_read_per_day_2024<-further_cleaned_mh%>%
+  head(10000)%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  group_by(Date,time_period)%>%
+  summarise(total_articles=sum(n_articles_visited))%>%
+  mutate(day_of_week=weekdays(Date))%>%
+  mutate(is_weekend=ifelse(day_of_week=="Saturday"|day_of_week=="Sunday",TRUE,FALSE))
+
+articles_read_per_day<-rbind(articles_read_per_day_2023,articles_read_per_day_2024)
+```
+
+```{r}
+gc()
+articles_read_per_day_lognormal <- brm(bf(total_articles~time_period+0+(1|is_weekend)),
+                                          family=lognormal(),
+  prior=c(
+          prior(normal(500,400),class="b")),                                       
+  data = articles_read_per_day,
+  cores = 4,
+  file = "articles_read_per_day_lognormal",
+  chains = 6, warmup = WARMUP, iter = 10000, seed = BAYES_SEED,
+  refresh = 0
+)
+
+articles_read_per_day_lognormal
+```
+```{r}
+pp_check(articles_read_per_day_lognormal,ndraws=1000)+ggplot2::xlim(0,1000)
+```
+
+
+
+

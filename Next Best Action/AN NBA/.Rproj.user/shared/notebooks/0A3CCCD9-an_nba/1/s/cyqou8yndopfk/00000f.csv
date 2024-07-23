@@ -1,0 +1,30 @@
+"0","post_data%>%
+  group_by(.row,other.web.sites,search.engines,social.networks,typed_bookmarked,last_touch_referrer,.category,visitor_access_level,total_days)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  mutate(
+         `other_.web_sites`=ifelse(last_touch_referrer==""other web sites"",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(last_touch_referrer==""search engines"",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(last_touch_referrer==""social networks"",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer==""typed/bookmarked"",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,""missing"",
+                              ifelse(`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  group_by(channel_level,.category,visitor_access_level)%>%
+  summarise(m=mean(m))%>%
+  ungroup()%>%
+  mutate(channel_level=ifelse(channel_level==""other_web_sites"",""other site"",
+                              ifelse(channel_level==""social_networks"",""social"",
+                                     ifelse(channel_level==""search_engines"",""search"",
+                                            ifelse(channel_level==""typed_bookmarked"",""direct"",channel_level)))))%>%
+  mutate(m=round(m*100,1))%>%
+  ggplot(aes(x=channel_level,y=m,color=.category,group=.category))+geom_point()+geom_line()+facet_wrap(~visitor_access_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = ""white"", colour = ""grey50""))+labs(y=""Likelihood to Order"",x=""Channel Segment"",color=""Product Purchased"")+geom_text(aes(label=paste(m,""%"",sep="""")),position=position_dodge(width=0.1),size=3,vjust=-0.5)
+"
+"1","[38;5;232m`summarise()` has grouped output by '.row', 'other.web.sites', 'search.engines', 'social.networks',
+'typed_bookmarked', 'last_touch_referrer', '.category', 'visitor_access_level'. You can override using the `.groups`
+argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'channel_level', '.category'. You can override using the `.groups` argument.[39m
+"

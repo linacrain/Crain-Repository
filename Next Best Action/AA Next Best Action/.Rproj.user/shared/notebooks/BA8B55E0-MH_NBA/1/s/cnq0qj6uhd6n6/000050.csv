@@ -1,0 +1,22 @@
+"0","post_data%>%
+  group_by(.row,missing,other_web_sites,search_engines,social_networks,typed_bookmarked,last_touch_referrer,.category)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  gather(referrer_source,visit_number,missing:typed_bookmarked)%>%
+  filter(.category==""Digital Only"")%>%
+  group_by(last_touch_referrer,.category,referrer_source,visit_number)%>%
+  summarise(m=mean(m))%>%
+  ggplot(aes(x=visit_number,y=m,color=referrer_source,group=referrer_source))+geom_point()+geom_line()+facet_wrap(~last_touch_referrer)+xlim(c(0,10))+labs(color=""Previous Visit channels"")
+"
+"1","[38;5;232m`summarise()` has grouped output by '.row', 'missing', 'other_web_sites', 'search_engines', 'social_networks',
+'typed_bookmarked', 'last_touch_referrer'. You can override using the `.groups` argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'last_touch_referrer', '.category', 'referrer_source'. You can override using the
+`.groups` argument.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 130 rows containing missing values or values outside the scale range (`geom_point()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 71 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"

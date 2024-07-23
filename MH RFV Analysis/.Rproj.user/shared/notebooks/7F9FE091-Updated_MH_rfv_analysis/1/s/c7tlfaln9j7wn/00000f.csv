@@ -1,0 +1,13 @@
+"0","share_active_subs_beta_binomial <- brm(
+  bf(n | trials(total_subs) ~ 0 + time_period),
+  data = active_subs_table,
+  family = binomial(link = ""identity""),
+  prior = c(prior(beta(1, 1), class = ""b"", dpar = ""mu"", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+"
+"2","Compiling Stan program...
+"
+"2","Start sampling
+"

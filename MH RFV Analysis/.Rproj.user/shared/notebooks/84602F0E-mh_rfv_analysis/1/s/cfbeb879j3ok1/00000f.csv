@@ -1,0 +1,12 @@
+"0","mean_days_between_visits<-days_between_session%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  group_by(ref_id,time_period)%>%
+  summarise(mean_days_between_visits=mean(days_between_current_and_previous,na.rm=TRUE))%>%
+  filter(!is.na(mean_days_between_visits))%>%
+  mutate(time_period=as.factor(time_period))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'ref_id'. You can override using the `.groups` argument.[39m
+"

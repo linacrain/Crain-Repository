@@ -1,0 +1,13 @@
+"0","consec_days_model%>%
+  epred_draws(newdata = sampled_articles_and_visits,ndraws=100)%>%
+  mutate(time_period = fct_relevel(time_period))%>%
+ggplot(aes(.epred,fill=time_period)) +geom_histogram()+theme_minimal()+xlim(c(0,100))
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 27554 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

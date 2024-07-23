@@ -1,0 +1,384 @@
+---
+title: "AA Next BestACtion"
+author: "Andrew Lin"
+date: "2024-07-16"
+output: html_document
+---
+```{r}
+library(tidyverse)
+library(readr)
+library(DBI)
+library(RPostgres)
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library(ggplot2)
+library(cmdstanr)
+library(rstan)
+library(StanHeaders)
+library(rstantools)
+library(tidybayes)
+library(brms)
+library(scales)
+library(zoo)
+library(ggpubr)
+library(marginaleffects)
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+```
+```{r}
+AA_NBA_test<-read.csv("AA_nba_csv.csv")
+```
+```{r}
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+clickshare_index_2<-dbGetQuery(prod,"select * from reporting.customer_master_reference where businessunitcode='AA'")
+clickshare_index<-clickshare_index_2%>%
+  select(clickshareuserid,advantagecustomerid)%>%
+  distinct()%>%
+  mutate(clickshareuserid=as.double(clickshareuserid))
+aa_adv<-dbGetQuery(prod,statement=read_file("aa_query.sql"))
+
+
+
+AA_NBA_test$`UID.All..v60...evar60.` <- as.numeric(ifelse(AA_NBA_test$`UID.All..v60...evar60.` == '' | AA_NBA_test$`UID.All..v60...evar60.` == "NO_ID", NA, AA_NBA_test$`UID.All..v60...evar60.`))
+
+t<- as.data.table(AA_NBA_test)
+
+t[, uid_max := max(`UID.All..v60...evar60.`, na.rm = TRUE), by = .(Visitor_ID, `Visit.Number`)]
+
+t[, uid_max:=ifelse(is.na(uid_max),Visitor_ID,uid_max)]
+
+t[, max_order := max(Orders, na.rm = TRUE), by = uid_max]
+
+AA_NBA <- t[max_order == 1]
+
+AA_NBA_Date_filtered<-AA_NBA%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  group_by(uid_max)%>%
+  arrange(Date,`Visit.Number`,.by_group=TRUE)
+
+AA_NBA_rolled_up<-AA_NBA_Date_filtered%>%
+  mutate(Purchase.IDs=ifelse(Purchase.IDs=="",NA,Purchase.IDs))%>%
+  mutate(nrow=row_number())%>%
+  mutate(order_row_number=ifelse(is.na(`Purchase.IDs`),NA,nrow))%>%
+  mutate(order_row_number=min(order_row_number,na.rm=TRUE))%>%
+  filter(nrow<=order_row_number)
+
+write.csv(AA_NBA_rolled_up,"AA_data_rolled_up_orders.csv")
+
+AA_NBA_rolled_up<-read.csv("AA_data_rolled_up_orders.csv")
+
+AA_aggregated<-AA_NBA_rolled_up
+
+last_touch_info<-AA_aggregated%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  group_by(uid_max)%>%
+  arrange(Date,Visit.Number,Clicks.to.Page,.by_group=TRUE)%>%
+  filter(nrow==order_row_number)%>%
+  select(uid_max,Purchase.IDs,Referrer.Type)%>%
+  mutate(Referrer.Type=ifelse(is.na(Referrer.Type),"missing",Referrer.Type))%>%
+  distinct()
+
+order_info<-aa_adv%>%
+  filter(owningoffice=="AA")%>%
+  filter(startissuedate>=as.Date("2023-01-01")|is.na(startissuedate))%>%
+  select(ordernumber,publicationcode,termlength)%>%
+  distinct()%>%
+  group_by(ordernumber)%>%
+  mutate(n=n_distinct(publicationcode))
+
+
+order_info%>%
+  group_by(ordernumber)%>%
+  filter(n>1)%>%
+  arrange(ordernumber)
+write.csv(order_info,"aa_order_info_from_adv.csv")
+
+order_info<-read.csv("aa_order_info_from_adv.csv")
+
+```
+
+```{r}
+full_aa_set<-AA_aggregated%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  group_by(uid_max)%>%
+  arrange(Date,Visit.Number,Clicks.to.Page,.by_group=TRUE)%>%
+  group_by(Date,uid_max,Mobile.Device.Type,Referrer.Type)%>%
+  mutate(Visitor.Access..v61...evar61.=ifelse(Visitor.Access..v61...evar61.=="","anonymous",Visitor.Access..v61...evar61.))%>%
+  mutate(visitor_access_level=ifelse(Visitor.Access..v61...evar61.=="reg"|Visitor.Access..v61...evar61.=="reg_metered",1,
+                                     ifelse(Visitor.Access..v61...evar61.=="anonymous",0,2)))%>%
+   mutate(Referrer.Type=ifelse(Referrer.Type=="missing"|Referrer.Type=="","other web sites",Referrer.Type))%>%
+  group_by(uid_max,Date,Referrer.Type)%>%
+  summarise(visitor_access_level=max(visitor_access_level,na.rm=TRUE),
+            n_visits=n_distinct(paste(Visitor_ID,Visit.Number)),
+            did_order=max(Orders),
+            )%>%
+  group_by(uid_max)%>%
+  arrange(Date,.by_group=TRUE)%>%
+  group_by(uid_max,Date)%>%
+  spread(Referrer.Type,n_visits)%>%
+  group_by(uid_max,Date)%>%
+  summarise(visitor_access_level=max(visitor_access_level),
+            did_order=max(did_order),
+            `other web sites`=sum(`other web sites`,na.rm=TRUE),
+            `search engines`=sum(`search engines`,na.rm=TRUE),
+            `social networks`=sum(`social networks`,na.rm=TRUE),
+            `typed/bookmarked`=sum(`typed/bookmarked`,na.rm=TRUE))%>%
+  ungroup()%>%
+  group_by(uid_max)%>%
+  summarise(visitor_access_level=max(visitor_access_level),
+            total_days=n_distinct(Date),
+            `other.web.sites`=sum(`other web sites`,na.rm=TRUE),
+            `search.engines`=sum(`search engines`,na.rm=TRUE),
+            `social.networks`=sum(`social networks`,na.rm=TRUE),
+            `typed_bookmarked`=sum(`typed/bookmarked`,na.rm=TRUE))%>%
+  left_join(last_touch_info,by=c("uid_max"="uid_max"))%>%
+  mutate(Referrer.Type=ifelse(Referrer.Type==""|is.na(Referrer.Type),"other web sites",Referrer.Type))%>%
+  left_join(order_info,by=c("Purchase.IDs"="ordernumber"))%>%
+  mutate(termlength=ifelse(termlength<=4,"monthly","annual"))%>%
+  filter(!is.na(publicationcode))%>%
+  group_by(uid_max,Purchase.IDs)%>%
+  mutate(product=ifelse(n==2,"All Access",
+                        ifelse(publicationcode=="AAZ","Digital Only",
+                               ifelse(publicationcode=="AAD","All Access","Premium"))))%>%
+  mutate(product=paste(product,termlength,sep="_"))%>%
+  mutate(last_touch_referrer=Referrer.Type)%>%
+  select(-c(publicationcode,n,termlength,Referrer.Type))%>%
+  distinct()%>%
+  mutate(visitor_access_level=ifelse(visitor_access_level==2,"subscribed",
+                                     ifelse(visitor_access_level==1,"Reg","anonymous")))%>%
+  mutate(visitor_access_level=as.factor(visitor_access_level),
+         product=as.factor(product),
+         last_touch_referrer=as.factor(last_touch_referrer))
+
+full_aa_set
+```
+
+```{r}
+full_aa_set%>%
+  group_by(visitor_access_level,Referrer.Type,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  mutate(last_touch_referrer=Referrer.Type)%>%
+  group_by(last_touch_referrer,visitor_access_level)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  mutate(visitor_access_level=ifelse(visitor_access_level==2,"subscribed",
+                                     ifelse(visitor_access_level==1,"Reg","anonymous")))%>%
+  ggplot(aes(Referrer.Type,prop,fill=product))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()+labs(x="Last Touch Referrer")+facet_wrap(vars(visitor_access_level))
+```
+
+```{r}
+full_aa_set%>%
+  mutate(missing=ifelse(Referrer.Type=="missing",missing+1,missing),
+         `other.web.sites`=ifelse(Referrer.Type=="other web sites",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(Referrer.Type=="search engines",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(Referrer.Type=="social networks",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(Referrer.Type=="typed/bookmarked",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`missing`>0&`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,"missing",
+                              ifelse(`missing`==0&`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`missing`==0&`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`missing`==0&`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`missing`==0&`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  group_by(channel_level,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  ggplot(aes(channel_level,prop,fill=product))+geom_bar(stat="identity",position="dodge")+theme_minimal()+coord_flip()+labs(x="Channel Segment")
+
+set.seed(1234)
+```
+
+```{r}
+library(nnet)
+fit_int<-multinom(product~visitor_access_level*total_days+last_touch_referrer+other.web.sites+search.engines+social.networks+typed_bookmarked,data=full_aa_set)
+fit_basic<-multinom(product~visitor_access_level+total_days+last_touch_referrer+other.web.sites+search.engines+social.networks+typed_bookmarked,data=full_aa_set)
+fit_mult_int<-multinom(product~visitor_access_level*total_days*last_touch_referrer+other.web.sites+search.engines+social.networks+typed_bookmarked,data=full_aa_set)
+
+anova(fit_int,fit_mult_int)
+```
+
+```{r}
+full_aa_set
+
+gc()
+aa_model_2_int_brms <- brm(
+  bf(product~visitor_access_level*total_days*last_touch_referrer+other.web.sites+search.engines+social.networks+typed_bookmarked),
+  data = full_aa_set,
+  family = "categorical",
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  cores=4,
+  refresh = 0
+)
+
+saveRDS(aa_model_2_int_brms,"aa_model_int_brms.rds")
+
+
+
+
+prior_summary(aa_model_2_int_brms)
+
+pp_check(aa_model_2_int_brms,ndraws=1000)
+```
+```{r}
+conditional_effects(aa_model_2_int_brms,categorical=TRUE)
+```
+```{r}
+gc()
+aa_model_1_int_brms <- brm(
+  bf(product~visitor_access_level*total_days+last_touch_referrer+other.web.sites+search.engines+social.networks+typed_bookmarked),
+  data = full_aa_set,
+  prior=c(
+          prior(normal(0,10),class="b",dpar="muDigitalOnlymonthly"),
+          prior(normal(0,10),class="b",dpar="muAllAccessannual"),
+          prior(normal(0,10),class="b",dpar="muPremiumannual")),
+  family = "categorical",
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  cores=4,
+  refresh = 0
+)
+
+aa_model_1_int_brms
+```
+
+
+```{r}
+plot(aa_model_2_int_brms)
+
+saveRDS(aa_model_1_int_brms,"aa_model_int_brms_updated.rds")
+
+post_data<-full_aa_set%>%
+  add_fitted_draws(aa_model_1_int_brms,n=1000,re_formula=NA)
+
+post_data_2<-full_aa_set%>%
+  add_predicted_draws(aa_model_1_int_brms,n=1000,re_formula=NA)
+```
+```{r}
+post_data%>%
+  mutate(total_day_category=ifelse(total_days==1,"One Day",
+                                   ifelse(total_days>1&total_days<=5,"2 - 5 Days","6 Days +")))%>%
+  mutate(total_day_category=factor(total_day_category,levels=c("One Day","2 - 5 Days","6 Days +")))%>%
+  group_by(visitor_access_level,total_day_category,.category)%>%
+  summarise(mean_value=round(mean(.value)*100,1))%>%
+  ungroup()%>%
+  ggplot(aes(y=mean_value,x=total_day_category,color=.category,group=.category))+geom_point(alpha=0.4)+geom_line()+
+facet_wrap(~visitor_access_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.5),panel.background = element_rect(fill = "white", colour = "grey50"))+geom_text(aes(label=paste(mean_value,"%",sep="")),position=position_dodge(width=1),size=3,vjust=-0.5)+labs(y="Proability of Purchasing",x="Total Days Visited",color="Product Outcome")
+```
+```{r}
+post_data_2%>%
+  group_by(uid_max,visitor_access_level,total_days,other.web.sites,search.engines,social.networks,typed_bookmarked,product,last_touch_referrer,.prediction)%>%
+  summarise(n=n_distinct(.draw))
+  
+```
+
+
+
+
+
+```{r}
+post_data%>%
+  group_by(visitor_access_level,last_touch_referrer,.category)%>%
+  summarise(mean_value=round(mean(.value)*100,1))%>%
+  ungroup()%>%
+  ggplot(aes(y=mean_value,x=last_touch_referrer,fill=.category,group=.category))+geom_bar(stat="identity",position="dodge")+
+facet_wrap(~visitor_access_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = "white", colour = "grey50"))+labs(y="% of Purchasing",x="Last Touch Source",color="Product Outcome")
+```
+
+```{r}
+post_data%>%
+  group_by(.row,other.web.sites,search.engines,social.networks,typed_bookmarked,last_touch_referrer,.category,visitor_access_level,total_days)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  mutate(
+         `other.web_sites`=ifelse(last_touch_referrer=="other web sites",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(last_touch_referrer=="search engines",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(last_touch_referrer=="social networks",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer=="typed/bookmarked",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,"missing",
+                              ifelse(`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+   mutate(total_day_category=ifelse(total_days==1,"One Day",
+                                   ifelse(total_days>1&total_days<=5,"2 - 5 Days","6 Days +")))%>%
+  mutate(total_day_category=factor(total_day_category,levels=c("One Day","2 - 5 Days","6 Days +")))%>%
+  group_by(channel_level,.category,total_day_category,visitor_access_level)%>%
+  summarise(m=mean(m))%>%
+  ungroup()%>%
+  mutate(channel_level=ifelse(channel_level=="other_web_sites","other site",
+                              ifelse(channel_level=="social_networks","social",
+                                     ifelse(channel_level=="search_engines","search",
+                                            ifelse(channel_level=="typed_bookmarked","direct",channel_level)))))%>%
+  mutate(m=round(m*100,1))%>%
+  ggplot(aes(x=total_day_category,y=m,color=.category,group=.category))+geom_point()+geom_line()+facet_grid(vars(channel_level),vars(visitor_access_level))+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = "white", colour = "grey50"))+labs(y="Likelihood to Order",x="Total Days",color="Product Purchased",title="Likelihood to Order (Anonymous, Direct and Multi-Channel)")+geom_text(aes(label=paste(m,"%",sep="")),position=position_dodge(width=0.1),size=3,vjust=-0.5)
+```
+```{r}
+post_data%>%
+  group_by(.row,`other.web.sites`,search.engines,social.networks,typed_bookmarked,last_touch_referrer,.category,visitor_access_level,total_days)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  mutate(
+         `other.web.sites`=ifelse(last_touch_referrer=="other web sites",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(last_touch_referrer=="search engines",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(last_touch_referrer=="social networks",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer=="typed/bookmarked",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,"missing",
+                              ifelse(`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  gather(referrer_source,visit_count,other.web.sites:typed_bookmarked)%>%
+  group_by(.row,.category,last_touch_referrer,visitor_access_level)%>%
+  summarise(m=mean(m),
+            n_distinct_channels=n_distinct(ifelse(visit_count>0,referrer_source,NA),na.rm=TRUE))%>%
+  ungroup()%>%
+  mutate(n_distinct_channels=as.character(n_distinct_channels))%>%
+  mutate(n_distinct_channels=as.factor(n_distinct_channels))%>%
+  group_by(.category,last_touch_referrer,visitor_access_level,n_distinct_channels)%>%
+  summarise(m=mean(m))%>%
+  mutate(m=round(m*100,1))%>%
+  ggplot(aes(x=n_distinct_channels,y=m,color=last_touch_referrer,group=last_touch_referrer))+geom_point(alpha=0.3)+geom_line(alpha=0.5)+facet_grid(vars(.category),vars(visitor_access_level),)+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = "white", colour = "grey50"))+labs(x="# Distinct Channels",y="Avg. Expected Probability of ")
+  gather(referrer_source,visit_number,missing:typed_bookmarked)%>%
+  group_by(.row)%>%
+  arrange(last_touch_referrer,.by_group=TRUE)
+```
+```{r}
+post_data%>%
+  group_by(.row,other.web.sites,search.engines,social.networks,typed_bookmarked,last_touch_referrer,.category,visitor_access_level,total_days)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  mutate(
+         `other.web.sites`=ifelse(last_touch_referrer=="other web sites",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(last_touch_referrer=="search engines",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(last_touch_referrer=="social networks",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer=="typed/bookmarked",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,"missing",
+                              ifelse(`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  group_by(channel_level,.category,visitor_access_level)%>%
+  summarise(m=mean(m))%>%
+  ungroup()%>%
+  mutate(channel_level=ifelse(channel_level=="other_web_sites","other site",
+                              ifelse(channel_level=="social_networks","social",
+                                     ifelse(channel_level=="search_engines","search",
+                                            ifelse(channel_level=="typed_bookmarked","direct",channel_level)))))%>%
+  mutate(m=round(m*100,1))%>%
+  ggplot(aes(x=channel_level,y=m,color=.category,group=.category))+geom_point()+geom_line()+facet_wrap(vars(visitor_access_level))+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = "white", colour = "grey50"))+labs(y="Likelihood to Order",x="Channel Segment",color="Product Purchased")+geom_text(aes(label=paste(m,"%",sep="")),position=position_dodge(width=0.1),size=3,vjust=-0.5)
+```
+
+
+
+
+
+

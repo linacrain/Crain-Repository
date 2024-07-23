@@ -1,0 +1,624 @@
+---
+title: "JSON Parsing and Analysis"
+author: "Andrew Lin"
+date: "2024-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(jsonlite)
+library(tidyverse)
+library(ndjson)
+library(lubridate)
+```
+
+```{r}
+blast_updates<-stream_in("Message Blasts and Updates\\8532_message_blast_updates.20240102.json.gz")
+blast_message<-stream_in("Message Blasts and Updates\\8532_message_blast.20240102.json.gz")
+message_transactional_update<-stream_in("test\\8532_message_transactional_updates.20240430.json (1)")
+message_transactional<-stream_in("test\\8532_message_transactional.20240430.json (4).gz")
+
+
+test_update<-blast_updates%>%
+  filter(is.na(delivery_status))%>%
+  group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+  mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+  mutate(across(contains("is_real_click"),~as.numeric(.)))%>%
+  mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+  mutate(did_click=rowSums(pick(contains("is_real_click")),na.rm=TRUE))%>%
+  rowwise()%>%
+  mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+  mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+  ungroup()%>%
+  mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+  filter(is_bot!=TRUE)%>%
+  select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,did_click,send_time)%>%
+  mutate(send_time=ymd_hms(send_time))
+```
+
+
+```{r}
+test_message<-blast_message%>%
+  head(10000)%>%
+ filter(is.na(delivery_status))%>%
+  group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+  mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+  mutate(across(contains("is_real_click"),~as.numeric(.)))%>%
+  mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+  mutate(did_click=rowSums(pick(contains("is_real_click")),na.rm=TRUE))%>%
+  rowwise()%>%
+  mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+  mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+  ungroup()%>%
+  mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+  filter(is_bot!=TRUE)%>%
+  select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,total_clicks,send_time)%>%
+  mutate(send_time=ymd_hms(send_time))%>%
+  filter(total_clicks>1)
+
+test_message%>%
+  left_join(test_update,by=c("profile_id"="profile_id","blast_id"="blast_id","message_id"="message_id"))
+
+
+test_update%>%
+  filter(!message_id%in%test_message$message_id)
+
+
+  
+```
+
+
+
+```{r}
+mt<-message_transactional%>%
+  group_by(id,device,profile_id,delivery_status,link_params.utm_medium,link_params.utm_source,send_time)%>%
+  mutate(has_no_null=if_all(contains("opens")&contains("ts"),~!is.na(.)))%>%
+  mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+  rowwise()%>%
+  mutate(did_open=sum(across(contains("is_real_open")),na.rm=TRUE))%>%
+  mutate(across(contains("opens")&contains("ts"),~ifelse(is.na(.),"XXX",.)))%>%
+  mutate(is_bot=if_all(contains("opens")&contains("ts"),~.==opens.0.ts&.!="XXX"))%>%
+  ungroup()%>%
+  select(id,device,profile_id,delivery_status,did_open,is_bot,has_no_null,link_params.utm_medium,link_params.utm_source,send_time,opens.1.is_real_open)%>%
+  group_by(id,device,profile_id,delivery_status,link_params.utm_medium,link_params.utm_source,send_time)%>%
+  summarise(did_open=sum(did_open,na.rm=TRUE),
+            is_bot=sum(is_bot,na.rm=TRUE))%>%
+  mutate(did_open=ifelse(did_open<1,FALSE,TRUE))%>%
+  mutate(is_bot=ifelse(is_bot<1,FALSE,TRUE))
+```
+
+
+
+```{r}
+mtu<-message_transactional_update%>%
+  group_by(id,device,profile_id,delivery_status,template,send_time)%>%
+  mutate(has_no_null=if_all(contains("opens")&contains("ts"),~!is.na(.)))%>%
+  mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+  rowwise()%>%
+  mutate(did_open=sum(across(contains("is_real_open")),na.rm=TRUE))%>%
+  mutate(across(contains("opens")&contains("ts"),~ifelse(is.na(.),"XXX",.)))%>%
+  mutate(is_bot=if_all(contains("opens")&contains("ts"),~.==opens.0.ts&.!="XXX"))%>%
+  ungroup()%>%
+  select(id,device,profile_id,delivery_status,did_open,is_bot,has_no_null,template,send_time,opens.1.is_real_open)%>%
+  group_by(id,device,profile_id,delivery_status,template,send_time)%>%
+  summarise(did_open=sum(did_open,na.rm=TRUE),
+            is_bot=sum(is_bot,na.rm=TRUE))%>%
+  mutate(did_open=ifelse(did_open<1,FALSE,TRUE))%>%
+  mutate(is_bot=ifelse(is_bot<1,FALSE,TRUE))
+```
+Script Test
+
+```{r}
+
+
+set_wd<-"C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Message Blasts and Updates"
+json_files <- list.files(path = folder, pattern = "*.json.gz", full.names = TRUE,ignore.case=TRUE)
+
+
+
+
+setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Test Folder")
+
+list.files()
+
+
+
+
+```
+
+```{r}
+x<-list.files()
+test_df<-as.data.frame(x)
+
+test_df%>%
+  mutate(value=str_extract(x,"\\.(\\d+)\\."))%>%
+  mutate(value=str_remove_all(value,"\\."))%>%
+  mutate(value=as.Date(value,"%Y%m%d"))
+
+list_of_values<-(test_df%>%
+  mutate(value=str_extract(x,"\\.(\\d+)\\."))%>%
+  mutate(value=str_remove_all(value,"\\.")))$value
+
+length(list_of_values)
+
+test_list<-20240110
+
+x <- iris[which(iris[,5] != "setosa"), c(1,5)]
+trials <- seq(1, 10000)
+boot_fx <- function(trial) {
+  ind <- sample(100, 100, replace=TRUE)
+  result1 <- glm(x[ind,2]~x[ind,1], family=binomial(logit))
+  r <- coefficients(result1)
+  res <- rbind(data.frame(), r)
+}
+system.time({
+  results <- mclapply(trials, boot_fx, mc.cores = numCores)
+})
+
+plan(multicore, workers = 19)
+
+read_in<-function(x){
+  message_blast<-paste("Message Blasts and Updates\\8532_message_blast.",x,".json.gz",sep="")
+
+  message_blast_update<-paste("Message Blasts and Updates\\8532_message_blast_updates.",x,".json.gz",sep="")
+  
+  message_blast_tbl<-stream_in(message_blast)
+  
+  message_blast_update_tbl<-stream_in(message_blast_update)
+  if(nrow(message_blast_tbl)>0){
+  message_blast_tbl<-message_blast_tbl%>%
+    filter(is.na(delivery_status))%>%
+    group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+    mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+    mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+    rowwise()%>%
+    mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+    mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+    ungroup()%>%
+    mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+    filter(is_bot!=TRUE)%>%
+    select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,total_clicks,send_time)%>%
+    mutate(send_time=ymd_hms(send_time))%>%
+    mutate(total_opens=did_open)%>%
+    mutate(did_open=ifelse(did_open>0,TRUE,FALSE),
+           did_click=ifelse(total_clicks>0,TRUE,FALSE))%>%
+    mutate(send_date=x)
+    print("Transformed Message Blast")
+    }
+
+  
+  if(nrow(message_blast_update_tbl)>0){
+  message_blast_update_tbl<-message_blast_update_tbl%>%
+    filter(is.na(delivery_status))%>%
+    group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+    mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+    mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+    rowwise()%>%
+    mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+    mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+    ungroup()%>%
+    mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+    filter(is_bot!=TRUE)%>%
+    select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,total_clicks,send_time)%>%
+    mutate(send_time=ymd_hms(send_time))%>%
+    mutate(total_opens=did_open)%>%
+    mutate(did_open=ifelse(did_open>0,TRUE,FALSE),
+           did_click=ifelse(total_clicks>0,TRUE,FALSE))%>%
+    mutate(send_date=x)
+  
+   print("Transformed Message Blast Update")
+  }
+  if(nrow(message_blast_tbl)>0&nrow(message_blast_update_tbl>0)){
+  
+  
+  missing<-message_blast_update_tbl%>%
+    filter(!message_id%in%message_blast_tbl$messageid|!profile_id%in%message_blast_tbl$profile_id|!blast_id%in%message_blast_tbl$blast_id)
+  
+  final_table<-rbind(message_blast_tbl,missing)
+  
+  output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Message Blast Output Jan to Marc\\message_blast_",x,".csv",sep="")
+  
+  write.csv(final_table,output_file,row.names = FALSE)
+  }
+  else if(nrow(message_blast_tbl)>0&nrow(message_blast_update_tbl==0)){
+    output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Message Blast Output Jan to Marc\\message_blast_",x,".csv",sep="")
+    write.csv(message_blast_tbl,output_file,row.names=FALSE)
+  }
+  else if(nrow(message_blast_tbl)==0&nrow(message_blast_update_tbl>0)){
+    output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Message Blast Output Jan to Marc\\message_blast_",x,".csv",sep="")
+    write.csv(message_blast_update_tbl,output_file,row.names=FALSE)
+  }
+  else{
+    print("Done")
+  }
+}
+
+list<-as.data.frame(list)
+
+
+results<-future_lapply(list_of_values,FUN=read_in)
+
+message_blast<-paste("8532_message_blast.","20240101",".json.gz",sep="")
+
+message_blast_tbl<-stream_in("Message Blasts and Updates\\8532_message_blast.20240102.json.gz")
+
+message_blast_tbl%>%
+  mutate(send_time=ymd_hms(send_time))
+
+blast_message
+
+list_of_values<-(list%>%
+  filter(!str_detect(list,"updates"))%>%
+  mutate(list=str_extract(list,"\\.(\\d+)\\."))%>%
+  mutate(list=str_remove_all(list,"\\."))%>%
+  mutate(list=as.numeric(list))%>%
+  filter(list>20240131)%>%
+  filter(list<20240401)%>%
+  mutate(list=as.character(list)))$list
+
+```
+
+
+
+
+```{r}
+
+```
+
+```{r}
+filedir<-setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Test Output Message Blast")
+file_names<-dir(filedir)
+
+
+result<-do.call(rbind,lapply(file_names,read.csv))
+```
+```{r}
+write.csv(result,"blast_message_opens.csv")
+```
+
+
+
+Profile List Construction
+
+
+```{r}
+
+process_chunk <- function(df) {
+  # Select specific columns
+  selected_df <- df %>%
+    select(id,vars.csUserId)  # Replace with your actual column names
+
+  # Append the processed chunk to the results list
+  results_list <<- append(results_list, list(selected_df))
+}
+
+
+
+
+setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profile List")
+
+
+stream_in("Profile List\\8532_profile.20240131.json.gz")
+profile_test_2<-stream_in("Profile List\\8532_profile.20240130.json.gz")
+
+profile_test%>%
+  select(id,vars.csUserId)%>%
+  unique()
+
+prof_build<-profile_test%>%
+  select(id,vars.csUserId)%>%
+  unique()
+
+profile_construct<-function(x){
+  paste_value<-paste("profile_list_feb_to_march\\8532_profile.",x,".json.gz",sep="")
+  con<-file(paste_value,"r")
+  prof<-stream_in(paste_value)
+  if(nrow(prof)>0){
+    prof<-prof%>%
+      select(id,vars.csUserId)%>%
+      unique()
+    
+      output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profiles Jan through March\\profile_check.",x,".csv",sep="")
+      write.csv(prof,output_file)
+  }
+}
+
+plan(multicore, workers = 19)
+
+p_list<-list_values[list_values!="20240131"]
+
+list<-as.data.frame(list)
+
+list
+
+rev(list_of_values_prof[1:30])
+
+paste_value<-paste("Profile List\\8532_profile.",20240131,".json.gz",sep="")
+
+f<-iris
+  
+p_list
+
+list<-as.data.frame(list)
+
+list_values<-(list%>%
+  mutate(list=str_extract(list,"\\.(\\d+)\\."))%>%
+  mutate(list=str_remove_all(list,"\\.")))$list
+
+prof_results<-future_lapply(list_values,FUN=profile_construct)
+```
+
+```{r}
+p_list<-list
+
+p_list
+```
+
+
+
+
+```{r}
+prof_build%>%
+  filter(id%in%profile_csv$id)
+
+
+profile_csv<-profile_csv%>%
+  select(-X)
+
+
+total_profile<-rbind(prof_build,profile_csv)
+
+profile_index<-total_profile%>%
+  distinct()
+
+
+write.csv(profile_index,"profile_index.csv",row.names=FALSE)
+```
+
+
+```{r}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+plan(multicore, workers = 19)
+
+read_in<-function(x){
+  message_blast<-paste("Message Blasts and Updates\\8532_message_blast.",x,".json.gz",sep="")
+
+  message_blast_update<-paste("Message Blasts and Updates\\8532_message_blast_updates.",x,".json.gz",sep="")
+  
+  profile_value<-paste("Profile List\\8532_profile.",x,".json.gz",sep="")
+  
+  message_blast_tbl<-stream_in(message_blast)
+  
+  message_blast_update_tbl<-stream_in(message_blast_update)
+  
+  prof<-stream_in(profile_value)
+  
+  if(nrow(prof)>0){
+
+      output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\test\\profile_check.",x,".csv",sep="")
+      write.csv(prof,output_file,row.names = FALSE)
+  }
+  
+  if(nrow(message_blast_tbl)>0){
+  message_blast_tbl<-message_blast_tbl%>%
+    filter(is.na(delivery_status))%>%
+    group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+    mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+    mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+    rowwise()%>%
+    mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+    mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+    ungroup()%>%
+    mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+    filter(is_bot!=TRUE)%>%
+    select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,total_clicks,send_time)%>%
+    mutate(send_time=ymd_hms(send_time))%>%
+    mutate(did_open=ifelse(did_open>0,TRUE,FALSE),
+           did_click=ifelse(total_clicks>0,TRUE,FALSE))
+    print("Transformed Message Blast")
+    }
+
+  
+  if(nrow(message_blast_update_tbl)>0){
+  message_blast_update_tbl<-message_blast_update_tbl%>%
+    filter(is.na(delivery_status))%>%
+    group_by(blast_id,message_id,device,profile_id,delivery_status,engagement)%>%
+    mutate(across(contains("is_real_open"),~as.numeric(.)))%>%
+    mutate(did_open=rowSums(pick(contains("is_real_open")),na.rm=TRUE))%>%
+    rowwise()%>%
+    mutate(total_clicks=rowSums(!is.na(pick(contains("clicks")&contains("ts")))))%>%
+    mutate(distinct_times=n_distinct(pick(contains("clicks")&contains("ts")),na.rm=TRUE))%>%
+    ungroup()%>%
+    mutate(is_bot=ifelse(total_clicks>1&distinct_times==1,TRUE,FALSE))%>%
+    filter(is_bot!=TRUE)%>%
+    select(blast_id,message_id,device,profile_id,delivery_status,engagement,did_open,total_clicks,send_time)%>%
+    mutate(send_time=ymd_hms(send_time))%>%
+    mutate(did_open=ifelse(did_open>0,TRUE,FALSE),
+           did_click=ifelse(total_clicks>0,TRUE,FALSE))
+  
+   print("Transformed Message Blast Update")
+  }
+  if(nrow(message_blast_tbl)>0&nrow(message_blast_update_tbl>0)){
+  
+  
+  missing<-message_blast_update_tbl%>%
+    filter(!message_id%in%message_blast_tbl$messageid|!profile_id%in%message_blast_tbl$profile_id|!blast_id%in%message_blast_tbl$blast_id)
+  
+  final_table<-rbind(message_blast_tbl,missing)
+  
+  output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Test Output Message Blast\\message_blast_",x,".csv",sep="")
+  
+  write.csv(final_table,output_file,row.names = FALSE)
+  }
+  else if(nrow(message_blast_tbl)>0&nrow(message_blast_update_tbl==0)){
+    output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Test Output Message Blast\\message_blast_",x,".csv",sep="")
+    write.csv(message_blast_tbl,output_file,row.names=FALSE)
+  }
+  else if(nrow(message_blast_tbl)==0&nrow(message_blast_update_tbl>0)){
+    output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Test Output Message Blast\\message_blast_",x,".csv",sep="")
+    write.csv(message_blast_update_tbl,output_file,row.names=FALSE)
+  }
+  else{
+    print("Done")
+  }
+}
+
+list<-as.data.frame(list)
+
+list_values<-(list%>%
+  mutate(list=str_extract(list,"\\.(\\d+)\\."))%>%
+  mutate(list=str_remove_all(list,"\\.")))$list
+
+rev(list_values)
+  
+getwd()
+
+results<-future_lapply(rev(list_values),FUN=read_in)
+```
+
+```{r}
+write.csv(final_message,"blast_message_opens_012024.csv")
+```
+```{r}
+clickshare<-clickshare_aa_stg_202405201637
+
+result<-do.call(rbind,lapply(file_names,read.csv))
+
+
+missed_files_2024_01_10<-stream_in("Profile List\\8532_profile.20240111.json.gz")
+```
+
+```{r}
+results<-list()
+
+profile_chunk_process<-function(x){
+
+  result_df<-data.frame(id=character(),
+                        vars.csUserId=numeric())
+  paste_value<-paste("profile_list_feb_to_march\\8532_profile.",x,".json.gz",sep="")
+  con<-file(paste_value,"r")
+  
+  
+  jsonlite::stream_in(con, handler = function(chunk) {
+  # Process the chunk (flatten and select columns)
+  processed_chunk<-chunk
+  
+  # Append the processed chunk to the final_result dataframe
+  results <<- append(results, list(processed_chunk))
+}, pagesize = 10000)
+}
+  
+  for(i in 1:length(results)){
+    id<-results[[i]]$id
+    vars.csUserId<-results[[i]]$vars$csUserId
+    temp_df<-data.frame(id,vars.csUserId)
+    result_df<-rbind(result_df,temp_df)
+  }
+  output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profile Dump 2\\Profiles Jan through March.",x,".csv",sep="")
+  result_df<-result_df%>%
+    unique()
+      write.csv(prof,result_df,row.names=FALSE)
+}
+
+test_case<-future_lapply("20240110",profile_chunk_process)
+
+
+
+paste_value<-("profile_list_feb_to_march\\8532_profile.20240201.json.gz")
+con<-file(paste_value,"r")
+  
+{
+results<-list()
+jsonlite::stream_in(con, handler = function(chunk) {
+  # Process the chunk (flatten and select columns)
+  processed_chunk<-chunk
+  
+  # Append the processed chunk to the final_result dataframe
+  results <<- append(results, list(processed_chunk))
+}, pagesize = 10000)
+
+result_df<-data.frame(id=character(),
+                      v=numeric())
+
+for(i in 1:length(results)){
+  id<-results[[i]]$id
+  v<-results[[i]]$vars$csUserId
+  df<-data.frame(id,v)%>%
+    unique()
+  result_df<-rbind(result_df,df)
+}
+}
+
+
+
+```
+
+
+```{r}
+profile_construct_2<-function(x){
+results<-list()
+paste_value<-paste("profile_list_feb_to_march\\8532_profile.",x,".json.gz",sep="")
+con<-file(paste_value,"r")
+on.exit(close(con))
+jsonlite::stream_in(con, handler = function(chunk) {
+  # Process the chunk (flatten and select columns)
+  processed_chunk<-chunk
+  
+  # Append the processed chunk to the final_result dataframe
+  results <<- append(results, list(processed_chunk))
+}, pagesize = 10000)
+print(length(results))
+
+result_df<-data.frame(id=character(),
+                      v=numeric())
+
+for(i in 1:length(results)){
+  print(i)
+  id<-results[[i]]$id
+  v<-results[[i]]$vars$csUserId
+  df<-data.frame(id,v)%>%
+    unique()
+  print(df)
+  result_df<-rbind(result_df,df)
+  }
+print(result_df)
+output_file<-paste("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profiles Jan through March\\profile_",x,".csv",sep="")
+write.csv(result_df,output_file)
+}
+
+file_list<-(files<-as.data.frame(files)%>%
+  mutate(files=str_extract(files,"\\.(\\d+)\\."))%>%
+  mutate(files=str_remove_all(files,"\\.")))$files
+
+str_remove_all(str_extract(files[1],"\\.(\\d+)\\."),"\\.")
+
+results<-future_lapply(file_list,FUN=profile_construct_2)
+```
+
+```{r}
+setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profiles Jan through March")
+```
+
+```{r}
+feb_march_profile_index<-result%>%
+  select(-X)%>%
+  unique()
+
+write.csv(feb_march_profile_index,"feb_march_profile_index.csv")
+```
+
+

@@ -1,0 +1,13 @@
+"0","further_cleaned_an%>%
+  filter(Date>=as.Date(""2024-01-01"",format=""%Y-%m-%d""))%>%
+  mutate(time_period=ifelse(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""),""2023 Jan 1st to May 31st"",""2024 Jan 1st to May 31st""))%>%
+mutate(month=month(Date),
+         year=year(Date))%>%
+  group_by(ref_id,time_period,month)%>%
+  summarise(n=n_distinct(Date,na.rm=TRUE))%>%
+  group_by(month)%>%
+  mutate(month=as.factor(month))%>%
+  ggplot(aes(month,n,fill=month))+geom_boxplot(outliers=FALSE)+theme_minimal()+coord_flip()
+"
+"1","[38;5;232m`summarise()` has grouped output by 'ref_id', 'time_period'. You can override using the `.groups` argument.[39m
+"

@@ -1,0 +1,6 @@
+"0","articles_and_visits%>%
+  mutate(articles_per_visit=total_articles/total_visits)%>%
+  ggplot(aes(articles_per_visit,fill=time_period))+geom_histogram()+theme_minimal()
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"

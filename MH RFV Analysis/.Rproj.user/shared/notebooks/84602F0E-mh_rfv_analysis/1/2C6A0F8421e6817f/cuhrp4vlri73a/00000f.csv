@@ -1,0 +1,14 @@
+"0","days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  mutate(previous_device=lag(`Mobile Device Type`,order_by=ref_id))%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  mutate(device_pattern=paste(`Mobile Device Type`,previous_device,sep=""->""))%>%
+  group_by(time_period,device_pattern)%>%
+  ggplot(aes(time_period,days_between_current_and_previous,fill=device_pattern))+geom_boxplot()+coord_flip()+theme_minimal()+labs(title=""Days Between Visits by Device Type (From Previous Visit)"")+ylim(c(0,10))
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 102314 rows containing non-finite outside the scale range (`stat_boxplot()`).[39m
+"

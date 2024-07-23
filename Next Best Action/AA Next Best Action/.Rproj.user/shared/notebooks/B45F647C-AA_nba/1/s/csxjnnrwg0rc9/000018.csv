@@ -1,0 +1,19 @@
+"0","full_aa_set%>%
+  mutate(missing=ifelse(Referrer.Type==""missing"",missing+1,missing),
+         `other.web.sites`=ifelse(Referrer.Type==""other web sites"",`other.web.sites`+1,`other.web.sites`),
+         `search.engines`=ifelse(Referrer.Type==""search engines"",`search.engines`+1,`search.engines`),
+         `social.networks`=ifelse(Referrer.Type==""social networks"",`social.networks`+1,`social.networks`),
+         `typed_bookmarked`=ifelse(Referrer.Type==""typed/bookmarked"",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`missing`>0&`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,""missing"",
+                              ifelse(`missing`==0&`other.web.sites`>0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`==0,'other.web.sites',
+                                     ifelse(`missing`==0&`other.web.sites`==0&`search.engines`>0&`social.networks`==0&`typed_bookmarked`==0,'search.engines',
+                                            ifelse(`missing`==0&`other.web.sites`==0&`search.engines`==0&`social.networks`>0&`typed_bookmarked`==0,'social.networks',
+                                                   ifelse(`missing`==0&`other.web.sites`==0&`search.engines`==0&`social.networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+  group_by(channel_level,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  ggplot(aes(channel_level,prop,fill=product))+geom_bar(stat=""identity"",position=""dodge"")+theme_minimal()+coord_flip()+labs(x=""Channel Segment"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'channel_level'. You can override using the `.groups` argument.[39m
+"

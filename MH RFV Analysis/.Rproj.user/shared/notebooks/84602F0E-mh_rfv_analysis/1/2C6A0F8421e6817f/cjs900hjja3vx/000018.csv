@@ -1,0 +1,17 @@
+"0","days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  ungroup()%>%
+  group_by(time_period)%>%
+  ggplot(aes(-days_between_current_and_previous,fill=time_period))+geom_histogram(alpha=0.2)+theme_minimal()+xlim(c(1,50))+labs(title=""Hist. of Days between Visits By Time Period"")
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 419981 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

@@ -1,0 +1,14 @@
+"0","MH_aggregated%>%
+  group_by(visitor_access_level,Referrer.Type,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  mutate(last_touch_referrer=Referrer.Type)%>%
+  group_by(last_touch_referrer,visitor_access_level)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  mutate(visitor_access_level=ifelse(visitor_access_level==3,""subscribed"",
+                                     ifelse(visitor_access_level==1,""Reg"",""anonymous"")))%>%
+  ggplot(aes(Referrer.Type,prop,fill=product))+geom_bar(stat=""identity"",position=""dodge"")+theme_minimal()+coord_flip()+labs(x=""Last Touch Referrer"")+facet_wrap(vars(visitor_access_level))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'visitor_access_level', 'Referrer.Type'. You can override using the `.groups`
+argument.[39m
+"

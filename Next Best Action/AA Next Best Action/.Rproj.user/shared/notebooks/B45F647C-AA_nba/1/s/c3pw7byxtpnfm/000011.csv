@@ -1,0 +1,10 @@
+"0","post_data_2<-full_aa_set%>%
+  add_predicted_draws(aa_model_1_int_brms,n=1000,re_formula=NA)
+"
+"2","Warning:"
+"2"," 
+In add_predicted_draws(): The `n` argument is a deprecated alias for `ndraws`.
+Use the `ndraws` argument instead.
+See help(""tidybayes-deprecated"").
+
+"

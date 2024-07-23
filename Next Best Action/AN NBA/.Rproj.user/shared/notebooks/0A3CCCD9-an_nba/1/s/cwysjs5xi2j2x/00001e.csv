@@ -1,0 +1,4 @@
+"0","an_pelcro<-dbGetQuery(prod,statement=read_file(""pelcro_new_an.sql""))
+"
+"2","Error: Failed to prepare query : ERROR:  column ""annual"" does not exist in s, i, unnamed_join
+"

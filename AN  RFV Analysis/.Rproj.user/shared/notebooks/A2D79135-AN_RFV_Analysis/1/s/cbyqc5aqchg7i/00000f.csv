@@ -1,0 +1,15 @@
+"0","an_2023<-read.csv(""AN_RFV_2024_01_01_2024_05_31.zip"")
+"
+"2","Warning in read.table(file = file, header = header, sep = sep, quote = quote,  :"
+"2","
+ "
+"2"," line 1 appears to contain embedded nulls
+"
+"2","Warning in read.table(file = file, header = header, sep = sep, quote = quote,  :"
+"2","
+ "
+"2"," incomplete final line found by readTableHeader on 'AN_RFV_2024_01_01_2024_05_31.zip'
+"
+"2","Error in read.table(file = file, header = header, sep = sep, quote = quote,  : 
+  more columns than column names
+"

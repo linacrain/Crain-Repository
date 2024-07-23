@@ -1,0 +1,32 @@
+"0","post_data%>%
+  group_by(.row,missing,other_web_sites,search_engines,social_networks,typed_bookmarked,last_touch_referrer,.category,visitor_access_level,total_days)%>%
+  summarise(m=mean(.value))%>%
+  ungroup()%>%
+  mutate(missing=ifelse(last_touch_referrer==""missing"",missing+1,missing),
+         `other_web_sites`=ifelse(last_touch_referrer==""other web sites"",`other_web_sites`+1,`other_web_sites`),
+         `search_engines`=ifelse(last_touch_referrer==""search engines"",`search_engines`+1,`search_engines`),
+         `social_networks`=ifelse(last_touch_referrer==""social networks"",`social_networks`+1,`social_networks`),
+         `typed_bookmarked`=ifelse(last_touch_referrer==""typed/bookmarked"",`typed_bookmarked`+1,`typed_bookmarked`))%>%
+  mutate(channel_level=ifelse(`missing`>0&`other_web_sites`==0&`search_engines`==0&`social_networks`==0&`typed_bookmarked`==0,""missing"",
+                              ifelse(`missing`==0&`other_web_sites`>0&`search_engines`==0&`social_networks`==0&`typed_bookmarked`==0,'other_web_sites',
+                                     ifelse(`missing`==0&`other_web_sites`==0&`search_engines`>0&`social_networks`==0&`typed_bookmarked`==0,'search_engines',
+                                            ifelse(`missing`==0&`other_web_sites`==0&`search_engines`==0&`social_networks`>0&`typed_bookmarked`==0,'social_networks',
+                                                   ifelse(`missing`==0&`other_web_sites`==0&`search_engines`==0&`social_networks`==0&`typed_bookmarked`>0,'typed_bookmarked','Multi-channel'))))))%>%
+   mutate(total_day_category=ifelse(total_days==1,""One Day"",
+                                   ifelse(total_days>1&total_days<=5,""2 - 5 Days"",""6 Days +"")))%>%
+  mutate(total_day_category=factor(total_day_category,levels=c(""One Day"",""2 - 5 Days"",""6 Days +"")))%>%
+  group_by(channel_level,.category,total_day_category)%>%
+  summarise(m=mean(m))%>%
+  ungroup()%>%
+  mutate(channel_level=ifelse(channel_level==""other_web_sites"",""other site"",
+                              ifelse(channel_level==""social_networks"",""social"",
+                                     ifelse(channel_level==""search_engines"",""search"",
+                                            ifelse(channel_level==""typed_bookmarked"",""direct"",channel_level)))))%>%
+  ggplot(aes(x=total_day_category,y=m,color=.category,group=.category))+geom_point()+geom_line()+facet_wrap(~channel_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = ""white"", colour = ""grey50""))+ylim(c(0,1))+labs(y=""Avg. Expected Probability of Purchasing"",x=""Total Days"",color=""Product Purchased"",title=""Avg. Expected Probability of Product Purchase by Visitor Access, Referral Source, and Total Days"")
+"
+"1","[38;5;232m`summarise()` has grouped output by '.row', 'missing', 'other_web_sites', 'search_engines', 'social_networks',
+'typed_bookmarked', 'last_touch_referrer', '.category', 'visitor_access_level'. You can override using the `.groups`
+argument.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'channel_level', '.category'. You can override using the `.groups` argument.[39m
+"

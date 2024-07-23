@@ -1,0 +1,13 @@
+"0","days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits<2)%>%
+  group_by(time_period,`Mobile.Device.Type`)%>%
+  summarise(n_visitors=n_distinct(ref_id))%>%
+  mutate(total=sum(n_visitors))%>%
+  mutate(prop=round(n_visitors/total,2)*100)%>%
+  ggplot(aes(time_period,prop,fill=`Mobile.Device.Type`))+geom_bar(stat=""identity"",position=""dodge"")+geom_text(aes(label=paste(prop,""%"",sep="""")),position=position_dodge(width=1),hjust=-0.1)+coord_flip()+theme_minimal()+labs(title=""Proportion of Mobile Types for Single Visit Subscribers"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'time_period'. You can override using the `.groups` argument.[39m
+"

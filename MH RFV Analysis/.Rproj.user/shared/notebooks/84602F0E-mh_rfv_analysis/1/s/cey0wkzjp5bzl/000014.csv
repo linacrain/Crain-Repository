@@ -1,0 +1,26 @@
+"0","articles_per_week_hurdle_log_normal<-brm(
+  bf(articles_per_week ~ time_period+0+(1|ref_id),
+     hu~time_period+0),
+  data = articles_per_week,
+  family=hurdle_lognormal(),
+  prior=c(prior(normal(0,10),class=""b""),
+           prior(normal(0,10),class=""b"",dpar=""hu""),
+          prior(normal(0,10),class=""sigma"")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+"
+"2","Warning:"
+"2"," Rows containing NAs were excluded from the model.
+"
+"2","Compiling Stan program...
+"
+"2","Start sampling
+"
+"2","Warning:"
+"2"," Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+Running the chains for more iterations may help. See
+https://mc-stan.org/misc/warnings.html#bulk-ess
+"

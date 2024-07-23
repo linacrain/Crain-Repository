@@ -1,0 +1,26 @@
+{
+    "id": "A64170F7",
+    "path": "~/GitHub/Crain-Repository/AA_RFV_Analysis/aa_adv.sql",
+    "project_path": "aa_adv.sql",
+    "type": "sql",
+    "hash": "1396107779",
+    "contents": "",
+    "dirty": false,
+    "created": 1720805573921.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "42,33",
+        "scrollLine": "15"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1720805580,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1720805580169,
+    "read_only": false,
+    "read_only_alternatives": []
+}

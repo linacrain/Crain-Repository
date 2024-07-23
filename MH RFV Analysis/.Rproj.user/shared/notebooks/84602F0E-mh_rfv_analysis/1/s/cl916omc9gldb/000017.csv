@@ -1,0 +1,7 @@
+"0","visitors_per_day%>%
+  mutate(day_of_week=weekdays(Date))%>%
+  mutate(is_weekend=ifelse(day_of_week==""Saturday""|day_of_week==""Sunday"",TRUE,FALSE))%>%
+  ggplot(aes(n_visitors,fill=is_weekend))+geom_histogram(position=""dodge"")
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"

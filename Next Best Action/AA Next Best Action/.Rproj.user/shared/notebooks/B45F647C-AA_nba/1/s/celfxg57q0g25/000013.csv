@@ -1,0 +1,10 @@
+"0","order_info<-aa_adv%>%
+  filter(owningoffice==""AA"")%>%
+  filter(startissuedate>=as.Date(""2023-01-01"")|is.na(startissuedate))%>%
+  select(ordernumber,publicationcode,termlength)%>%
+  distinct()%>%
+  group_by(ordernumber)%>%
+  mutate(n=n_distinct(publicationcode))
+"
+"2","Error: object 'aa_adv' not found
+"
