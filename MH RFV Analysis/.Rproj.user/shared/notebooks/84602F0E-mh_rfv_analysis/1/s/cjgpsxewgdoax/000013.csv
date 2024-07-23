@@ -1,0 +1,8 @@
+"0","pp_check(articles_per_week_log_normal_no_zeros,ndraws=100)+ggplot2::xlim(0,5)
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 202831 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2007 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"

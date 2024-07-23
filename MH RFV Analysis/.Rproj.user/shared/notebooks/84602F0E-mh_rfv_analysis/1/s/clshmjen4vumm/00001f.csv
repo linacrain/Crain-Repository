@@ -1,0 +1,17 @@
+"0","recency_negative_binomial<-brm(
+  bf(recency ~ time_period+0),
+  data = no_na_recency,
+  family=negbinomial(),
+  prior=c(
+          prior(uniform(0,150),class=""b"",lb=0,ub=150),
+          prior(gamma(1,0.5),class=""shape"")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+"
+"2","Compiling Stan program...
+"
+"2","Start sampling
+"

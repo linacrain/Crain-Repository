@@ -1,0 +1,5 @@
+"0","conditional_effects(aa_model_2_int_brms,categorical=TRUE)
+"
+"2","Warning:"
+"2"," Interactions cannot be plotted directly if 'categorical' is TRUE. Please use argument 'conditions' instead.
+"

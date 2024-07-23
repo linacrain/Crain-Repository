@@ -1,0 +1,13 @@
+"0","post_data%>%
+  mutate(total_day_category=ifelse(total_days==1,""One Day"",
+                                   ifelse(total_days>1&total_days<=5,""2 - 5 Days"",""6 Days +"")))%>%
+  mutate(total_day_category=factor(total_day_category,levels=c(""One Day"",""2 - 5 Days"",""6 Days +"")))%>%
+  group_by(visitor_access_level,total_day_category,.category)%>%
+  summarise(mean_value=round(mean(.value)*100,1))%>%
+  ungroup()%>%
+  ggplot(aes(y=mean_value,x=total_day_category,color=.category,group=.category))+geom_point(alpha=0.4)+geom_line()+
+facet_wrap(~visitor_access_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.5),panel.background = element_rect(fill = ""white"", colour = ""grey50""))+geom_text(aes(label=paste(mean_value,""%"",sep="""")),position=position_dodge(width=1),size=3,vjust=-0.5)+labs(y=""Proability of Purchasing"",x=""Total Days Visited"",color=""Product Outcome"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'visitor_access_level', 'total_day_category'. You can override using the `.groups`
+argument.[39m
+"

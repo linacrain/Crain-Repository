@@ -1,0 +1,7 @@
+"0","z<-conditional_effects(mh_model_2_int_brms, conditions = conditions_df,effect=""visitor_access_level:total_days"",categorical=TRUE)
+"
+"2","Warning:"
+"2"," Interactions cannot be plotted directly if 'categorical' is TRUE. Please use argument 'conditions' instead.
+"
+"2","Error: No valid effects detected.
+"

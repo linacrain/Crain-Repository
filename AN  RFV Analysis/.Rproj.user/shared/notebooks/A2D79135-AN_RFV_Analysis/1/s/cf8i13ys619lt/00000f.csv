@@ -1,0 +1,113 @@
+"0","library(tidyverse)"
+"1","── [1mAttaching core tidyverse packages[22m ─────────────────────────────────────────────────────────────── tidyverse 2.0.0 ──
+[32m✔[39m [34mdplyr    [39m 1.1.4     [32m✔[39m [34mreadr    [39m 2.1.5
+[32m✔[39m [34mforcats  [39m 1.0.0     [32m✔[39m [34mstringr  [39m 1.5.1
+[32m✔[39m [34mggplot2  [39m 3.5.1     [32m✔[39m [34mtibble   [39m 3.2.1
+[32m✔[39m [34mlubridate[39m 1.9.3     [32m✔[39m [34mtidyr    [39m 1.3.1
+[32m✔[39m [34mpurrr    [39m 1.0.2     
+"
+"1","── [1mConflicts[22m ───────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+[31m✖[39m [34mdplyr[39m::[32mfilter()[39m masks [34mstats[39m::filter()
+[31m✖[39m [34mdplyr[39m::[32mlag()[39m    masks [34mstats[39m::lag()
+[36mℹ[39m Use the ]8;;http://conflicted.r-lib.org/conflicted package]8;; to force all conflicts to become errors
+"
+"0","library(DBI)"
+"0","library(RPostgres)"
+"0","library(ggplot2)"
+"0","library(cmdstanr)"
+"2","This is cmdstanr version 0.8.1
+"
+"2","- CmdStanR documentation and vignettes: mc-stan.org/cmdstanr
+"
+"2","- Use set_cmdstan_path() to set the path to CmdStan
+"
+"2","- Use install_cmdstan() to install CmdStan
+"
+"0","library(rstan)"
+"2","Loading required package: StanHeaders
+"
+"2","
+rstan version 2.32.6 (Stan version 2.32.2)
+
+"
+"2","For execution on a local, multicore CPU with excess RAM we recommend calling
+options(mc.cores = parallel::detectCores()).
+To avoid recompilation of unchanged Stan programs, we recommend calling
+rstan_options(auto_write = TRUE)
+For within-chain threading using `reduce_sum()` or `map_rect()` Stan functions,
+change `threads_per_chain` option:
+rstan_options(threads_per_chain = 1)
+
+"
+"2","Do not specify '-march=native' in 'LOCAL_CPPFLAGS' or a Makevars file
+"
+"2","
+Attaching package: ‘rstan’
+
+"
+"2","The following object is masked from ‘package:tidyr’:
+
+    extract
+
+"
+"0","library(StanHeaders)"
+"0","library(rstantools)"
+"2","This is rstantools version 2.4.0
+"
+"0","library(tidybayes)"
+"0","library(brms)"
+"2","Loading required package: Rcpp
+"
+"2","Loading 'brms' package (version 2.21.0). Useful instructions
+can be found by typing help('brms'). A more detailed introduction
+to the package is available through vignette('brms_overview').
+"
+"2","
+Attaching package: ‘brms’
+
+"
+"2","The following objects are masked from ‘package:tidybayes’:
+
+    dstudent_t, pstudent_t, qstudent_t, rstudent_t
+
+"
+"2","The following object is masked from ‘package:rstan’:
+
+    loo
+
+"
+"2","The following object is masked from ‘package:stats’:
+
+    ar
+
+"
+"0","library(scales)"
+"2","
+Attaching package: ‘scales’
+
+"
+"2","The following object is masked from ‘package:purrr’:
+
+    discard
+
+"
+"2","The following object is masked from ‘package:readr’:
+
+    col_factor
+
+"
+"0","library(zoo)"
+"2","
+Attaching package: ‘zoo’
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+"
+"0","library(ggpubr)"
+"0","CHAINS <- 4"
+"0","ITER <- 2000"
+"0","WARMUP <- 1000"
+"0","BAYES_SEED <- 1234"

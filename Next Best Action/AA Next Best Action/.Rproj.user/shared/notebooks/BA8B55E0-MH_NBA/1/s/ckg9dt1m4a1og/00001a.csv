@@ -1,0 +1,5 @@
+"0","effect_plot(mh_model_5_agg,pred=visitor_access_level)
+"
+"2","Error in UseMethod(""family"") : 
+  no applicable method for 'family' applied to an object of class ""c('multinom', 'nnet')""
+"

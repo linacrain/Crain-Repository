@@ -1,0 +1,12 @@
+"0","articles_and_visits%>%
+  mutate(time_period=as.factor(time_period))%>%
+  ggplot(aes(x=total_visits,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(0,50))
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 5001 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

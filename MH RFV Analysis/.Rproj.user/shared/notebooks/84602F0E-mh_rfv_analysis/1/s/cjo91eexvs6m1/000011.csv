@@ -1,0 +1,31 @@
+"0","visitors_per_day_2023<-mh_cleaned%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  filter(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""))%>%"
+"0","  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%"
+"0","  mutate(time_period=ifelse(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""),""2023 Jan 1st to May 31st"",""2024 Jan 1st to May 31st""))%>%"
+"0","  group_by(Date,time_period)%>%"
+"0","  summarise(n_visitors=n_distinct(ref_id))"
+"1","[38;5;232m`summarise()` has grouped output by 'Date'. You can override using the `.groups` argument.[39m
+"
+"0","visitors_per_day_2024<-mh_cleaned%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  filter(Date>=as.Date(""2024-01-01"",format=""%Y-%m-%d""))%>%"
+"0","  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%"
+"0","  mutate(time_period=ifelse(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""),""2023 Jan 1st to May 31st"",""2024 Jan 1st to May 31st""))%>%"
+"0","  ungroup()%>%"
+"0","  group_by(Date,time_period)%>%"
+"0","  summarise(n_visitors=n_distinct(ref_id))"
+"1","[38;5;232m`summarise()` has grouped output by 'Date'. You can override using the `.groups` argument.[39m
+"
+"0","visitors_per_day<-rbind(visitors_per_day_2023,visitors_per_day_2024)"
+"0",""
+"0","visitors_per_day%>%"
+"0","  ggplot(aes(n_visitors,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(1500,5000))"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 92 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"

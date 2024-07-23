@@ -1,0 +1,182 @@
+---
+title: "Sailthru Analysis"
+author: "Andrew Lin"
+date: "2024-05-21"
+output: html_document
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(RPostgres)
+profile_index<-read.csv("profile_index.csv")
+
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+clickshare_index<-dbGetQuery(prod,"SELECT userid,createdate,aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid from prod.staging.clickshare_aa_stg
+where createdate>=Date('2024-01-01') and createdate<('2024-02-01')")
+
+clickshare_index<-clickshare_index%>%
+  mutate(across(contains("subscriberid"),~ifelse(.==""|is.na(.),NA,.)))%>%
+  mutate(aa_subid=as.numeric(coalesce(aa_subscriberid,aad_subscriberid,aar_subscriberid,aaz_subscriberid)))%>%
+  select(userid,createdate,aa_subid)
+
+profile_index<-index<-profile_index%>%
+  mutate(csid=as.numeric(vars.csUserId))%>%
+  select(-vars.csUserId)
+
+clickshare_sailthru_join<-clickshare_index%>%
+  left_join(profile_index,by=c("userid"="csid"))
+
+clickshare_total<-n_distinct(clickshare_index$userid)
+
+converted_count<-(clickshare_index%>%
+  filter(!is.na(aa_subid))%>%
+  summarise(n=n_distinct(userid)))$n
+
+conversion_rate<-round(converted_count/clickshare_total*100,3)
+
+
+unique_message_blast<-final_message%>%
+  distinct()
+
+library(data.table)
+  
+message<-as.data.table(unique_message_blast)
+
+message[, n := max(did_open), by = .(profile_id,message_id,blast_id,send_time,send_date)]          
+result <- message[did_open == n]                        
+result[, n := NULL]                         
+result
+
+
+
+grouped_values<-result%>%
+  filter(profile_id%in%clickshare_sailthru_join$id)%>%
+  ungroup()%>%
+  group_by(profile_id)%>%
+  summarise(n_distinct_emails=n_distinct(blast_id,message_id,profile_id,send_time),
+            n_distinct_dates=n_distinct(send_date),
+            n_distinct_blasts=n_distinct(blast_id),
+            n_distinct_messages=n_distinct(message_id),
+            total_opened_emails=sum(did_open),
+            total_clicked_emails=sum(did_click),
+            )
+
+clickshare_sailthru_join%>%
+  left_join(grouped_values,by=c("id"="profile_id"))%>%
+  summarise(customers_we_emailed=n_distinct(ifelse(is.na(n_distinct_emails),NA,userid),na.rm=TRUE))
+
+raw_info<-result%>%
+  filter(profile_id%in%clickshare_sailthru_join$id)
+
+r_values_avg_per_week<-raw_info%>%
+  separate(send_time,into=c("date","time"),sep=" ")%>%
+  mutate(send_date=as.Date(date,format="%Y-%m-%d"))%>%
+  mutate(week = week(ymd(send_date)))%>%
+  group_by(profile_id,week)%>%
+  summarise(number_emails=n_distinct(paste(blast_id,message_id,profile_id,date,time)),
+            total_opens=n_distinct(ifelse(did_open==TRUE,paste(blast_id,message_id,profile_id,date,time),NA),na.rm=TRUE),
+            total_open_and_clicked=n_distinct(ifelse(did_open==TRUE&did_click==TRUE,paste(blast_id,message_id,profile_id,date,time),NA),na.rm=TRUE))%>%
+  
+            avg_emails_per_week=sum(number_emails)/n_distinct(week,na.rm=TRUE))
+  ggplot(aes(avg_emails_per_week))+geom_histogram()
+
+```
+
+
+In Jan 2024, AA had a total of `r clickshare_total` registrations, of which `r converted_count`(`r conversion rate`%) converted to a subscription. 
+
+We sent email messages to  
+
+
+```{r}
+clickshare_sailthru_join%>%
+  left_join(grouped_values,by=c("id"="profile_id"))%>%
+  filter(!is.na(n_distinct_emails))%>%
+  summarise(customers_who_opened=n_distinct(ifelse(total_opened_emails>0,userid,NA),na.rm=TRUE),
+            customers_who_opened_and_clicked=n_distinct(ifelse(total_opened_emails>0&total_clicked_emails>0,userid,NA),na.rm=TRUE))
+```
+```{r}
+clickshare_sailthru_join%>%
+  left_join(r_values_avg_per_week,b=c("id"="profile_id"))%>%
+  mutate(enagement=ifelse(total_open_cliked))
+  ggplot(aes(avg_emails_per_week),fill=ife)+geom_histogram()
+  
+```
+
+
+```{r}
+cleaned_profile_index<-profile_index_full%>%
+  select(-X)%>%
+  distinct()
+
+setwd("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis")
+```
+
+
+```{r}
+
+
+process_chunk <- function(chunk) {
+  # Example transformation: filter rows and select specific columns
+  
+  return(chunk)
+}
+
+jsonlite::stream_in(con2, handler = function(chunk) {
+  # Process the chunk
+  results <<- append(results, list(chunk))
+  
+  # Append the processed chunk to the results list
+  
+}, pagesize = 10000)
+
+cleaned_profile_index_2<-cleaned_profile_index
+
+
+
+
+for(i in 1:length(results)){
+  x<-results[[i]]
+  id<-x$id
+  clickshare_id<-x$vars$csUserId
+  df<-data.frame(id=id,
+                 vars.csUserId=clickshare_id)
+  cleaned_profile_index_2<<-rbind(cleaned_profile_index_2,df)
+}
+
+for(i in 1:length(results)){
+  
+}
+
+
+final_cleaned_profile_index<-cleaned_profile_index_2%>%
+  distinct()
+
+write.csv(final_cleaned_profile_index,"final_cleaned_profile_index_2.csv")
+
+con2<-file("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profile List\\8532_profile.20240110.json.gz","r")
+
+
+missing<-jsonlite::stream_in("C:\\Users\\andrew.lin\\OneDrive - Crain Communications\\Documents\\Github Repository\\Sailthru_Blast_Analysis\\Profile List\\8532_profile.20240110.json.gz",cls="dt")
+```
+
+
+```{r}
+x
+```
+
+
+
+
+
+
+

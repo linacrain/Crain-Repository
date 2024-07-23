@@ -1,0 +1,1 @@
+{"classes":["grouped_df","tbl_df","tbl","data.frame"],"nrow":20393,"ncol":11,"summary":{"A tibble":["20,393 × 11"],"Groups":["uid_max, visitor_access_level, total_days, other.web.sites, search.engines, social.networks, typed_bookmarked, product, last_touch_referrer [5,319]"]}}

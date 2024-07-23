@@ -1,0 +1,62 @@
+"0","recency_2023<-mh_cleaned%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  filter(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""))%>%"
+"0","  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%"
+"0","  mutate(time_period=ifelse(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""),""2023 Jan 1st to May 31st"",""2024 Jan 1st to May 31st""))%>%"
+"0","  group_by(ref_id,time_period)%>%"
+"0","  summarise(last_article_visit=max(if_else(n_articles_visited>0,Date,NA),na.rm=TRUE))%>%"
+"0","  mutate(end_date=as.Date(""2023-05-31"",format=""%Y-%m-%d""),"
+"0","         recency=as.integer(difftime(end_date,last_article_visit,units=""days"")))%>%"
+"0","  mutate(recency=ifelse(is.na(recency),149,recency))"
+"2","Warning:"
+"2"," [38;5;232mThere were 981 warnings in `summarise()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `last_article_visit = max(if_else(n_articles_visited > 0, Date, NA), na.rm = TRUE)`.
+[36mℹ[38;5;232m In group 2: `ref_id = ""1001018""` and `time_period = ""2023 Jan 1st to May 31st""`.[39m
+Caused by warning in `max.default()`:
+[33m![39m no non-missing arguments to max; returning -Inf
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 980 remaining warnings.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'ref_id'. You can override using the `.groups` argument.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere were 981 warnings in `mutate()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `recency = as.integer(difftime(end_date, last_article_visit, units = ""days""))`.
+[36mℹ[38;5;232m In group 2: `ref_id = ""1001018""`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion to integer range
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 980 remaining warnings.[39m
+"
+"0","recency_2024<-mh_cleaned%>%"
+"0","  mutate(Date=as.Date(Date,format=""%Y-%m-%d""))%>%"
+"0","  filter(Date>=as.Date(""2024-01-01"",format=""%Y-%m-%d""))%>%"
+"0","  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%"
+"0","  mutate(time_period=ifelse(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d""),""2023 Jan 1st to May 31st"",""2024 Jan 1st to May 31st""))%>%"
+"0","  ungroup()%>%"
+"0"," group_by(ref_id,time_period)%>%"
+"0","  summarise(last_article_visit=max(if_else(n_articles_visited>0,Date,NA),na.rm=TRUE))%>%"
+"0","  mutate(end_date=as.Date(""2024-05-31"",format=""%Y-%m-%d""),"
+"0","         recency=as.integer(difftime(end_date,last_article_visit,units=""days"")))%>%"
+"0","  mutate(recency=ifelse(is.na(recency),150,recency))"
+"2","Warning:"
+"2"," [38;5;232mThere were 810 warnings in `summarise()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `last_article_visit = max(if_else(n_articles_visited > 0, Date, NA), na.rm = TRUE)`.
+[36mℹ[38;5;232m In group 33: `ref_id = ""1008526""` and `time_period = ""2024 Jan 1st to May 31st""`.[39m
+Caused by warning in `max.default()`:
+[33m![39m no non-missing arguments to max; returning -Inf
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 809 remaining warnings.[39m
+"
+"1","[38;5;232m`summarise()` has grouped output by 'ref_id'. You can override using the `.groups` argument.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere were 810 warnings in `mutate()`.
+The first warning was:[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `recency = as.integer(difftime(end_date, last_article_visit, units = ""days""))`.
+[36mℹ[38;5;232m In group 33: `ref_id = ""1008526""`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion to integer range
+[38;5;232m[36mℹ[38;5;232m Run ]8;;ide:run:dplyr::last_dplyr_warnings()dplyr::last_dplyr_warnings()]8;; to see the 809 remaining warnings.[39m
+"
+"0","recency<-rbind(recency_2023,recency_2024)"

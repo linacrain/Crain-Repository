@@ -1,0 +1,11 @@
+"0","full_an_set%>%
+  group_by(visitor_access_level,last_touch_referrer,product)%>%
+  summarise(n=n_distinct(uid_max))%>%
+  group_by(last_touch_referrer,visitor_access_level)%>%
+  mutate(total=sum(n))%>%
+  mutate(prop=round(n/total*100,1))%>%
+  ggplot(aes(last_touch_referrer,prop,fill=product))+geom_bar(stat=""identity"",position=""dodge"")+theme_minimal()+coord_flip()+labs(x=""Last Touch Referrer"")+facet_wrap(vars(visitor_access_level))
+"
+"1","[38;5;232m`summarise()` has grouped output by 'visitor_access_level', 'last_touch_referrer'. You can override using the
+`.groups` argument.[39m
+"

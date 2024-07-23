@@ -1,0 +1,10 @@
+"0","post_data%>%
+  group_by(visitor_access_level,last_touch_referrer,.category)%>%
+  summarise(mean_value=round(mean(.value)*100,1))%>%
+  ungroup()%>%
+  ggplot(aes(y=mean_value,x=last_touch_referrer,fill=.category,group=.category))+geom_bar(stat=""identity"",position=""dodge"")+
+facet_wrap(~visitor_access_level)+theme(axis.text.x = element_text(angle = 90,vjust=-0.2),panel.background = element_rect(fill = ""white"", colour = ""grey50""))+labs(y=""% of Purchasing"",x=""Last Touch Source"",color=""Product Outcome"")
+"
+"1","[38;5;232m`summarise()` has grouped output by 'visitor_access_level', 'last_touch_referrer'. You can override using the
+`.groups` argument.[39m
+"

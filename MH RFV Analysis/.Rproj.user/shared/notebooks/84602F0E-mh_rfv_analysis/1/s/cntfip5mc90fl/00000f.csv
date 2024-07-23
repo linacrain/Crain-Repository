@@ -1,0 +1,6 @@
+"0","mh_cleaned<-rolled_up_mh%>%
+  filter(Date<=as.Date(""2023-05-31"",format=""%Y-%m-%d"")|Date>=as.Date(""2024-01-01"",format=""%Y-%m-%d""))
+"
+"2","Error in rolled_up_mh %>% filter(Date <= as.Date(""2023-05-31"", format = ""%Y-%m-%d"") |  : 
+  could not find function ""%>%""
+"

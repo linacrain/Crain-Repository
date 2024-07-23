@@ -1,0 +1,17 @@
+"0","check_hmc_diagnostics(visitors_per_day_weekend_mixture$fit)
+"
+"1","
+Divergences:
+"
+"2","0 of 6000 iterations ended with a divergence.
+"
+"1","
+Tree depth:
+"
+"2","0 of 6000 iterations saturated the maximum tree depth of 10.
+"
+"1","
+Energy:
+"
+"2","E-BFMI indicated no pathological behavior.
+"

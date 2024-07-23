@@ -1,0 +1,926 @@
+---
+title: "MH RFV Analysis"
+author: "Andrew Lin"
+date: "2024-07-02"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(DBI)
+library(RPostgres)
+library(ggplot2)
+library(cmdstanr)
+library(rstan)
+library(StanHeaders)
+library(rstantools)
+library(tidybayes)
+library(brms)
+CHAINS <- 4
+ITER <- 2000
+WARMUP <- 1000
+BAYES_SEED <- 1234
+```
+```{r}
+
+mh <- read_csv("MH_Engagement_CSV_2.zip")
+
+prod <- dbConnect(RPostgres::Postgres(),  
+               host = 'crain-aspire-1.cdhessuxqdxg.us-east-1.redshift.amazonaws.com',
+               port = 5439,
+               user = 'aspireuser',
+               password = 'Aspirecrainredshift1',
+               dbname = 'prod',
+               sslmode='require')
+
+clickshare_index2<-dbGetQuery(prod,"select * from reporting.customer_master_reference where businessunitcode='MH'")
+clickshare_index<-clickshare_index2%>%
+  select(customermasterkey,visitorid,clickshareuserid,pelcrocustomerid)%>%
+  distinct()
+```
+
+```{r}
+rolled_up_mh<-mh%>%
+  mutate(Date=as.Date(Date,format="%B %d, %Y"))%>%
+  mutate(`UID All (v60) (evar60)`=as.numeric(ifelse(`UID All (v60) (evar60)`==''|`UID All (v60) (evar60)`=="NO_ID",NA,`UID All (v60) (evar60)`)))%>%
+  mutate(content_type=ifelse(is.na(`Content Type (v31) (evar31)`)&str_detect(`Page Name (v6) (evar6)`,"clickshare"),"clickshare:login/settings",`Content Type (v31) (evar31)`))%>%
+  left_join(clickshare_index,by=c("Visitor_ID"="visitorid"))%>%
+  mutate(pelcrocustomerid=as.numeric(pelcrocustomerid))%>%
+  mutate(ref_id=ifelse(pelcrocustomerid==0,clickshareuserid,pelcrocustomerid))%>%
+  group_by(ref_id)%>%
+  arrange(Date,`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  select(ref_id,Date,Visitor_ID,`Visit Number`,`Clicks to Page`,`Content Type (v31) (evar31)`,`Page Name (v6) (evar6)`,content_type,`Mobile Device Type`)%>%
+  group_by(ref_id,Visitor_ID,`Visit Number`,Date,`Mobile Device Type`)%>%
+  arrange(`Visit Number`,`Clicks to Page`,.by_group=TRUE)%>%
+  mutate(clicks_to_article=ifelse(`Content Type (v31) (evar31)`=="article",`Clicks to Page`,NA))%>%
+  mutate(did_sub=ifelse(str_detect(`Page Name (v6) (evar6)`,"subs:subscribe:")&!is.na(`Page Name (v6) (evar6)`),1,0))%>%
+  summarise(n_articles_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`=="article",`Page Name (v6) (evar6)`,NA),na.rm=TRUE),
+            n_clicks_to_article=min(clicks_to_article,na.rm=TRUE),
+            did_subscribe_during_visit=max(did_sub,na.rm=TRUE),
+            n_non_article_pages_visited=n_distinct(ifelse(`Content Type (v31) (evar31)`!="article"|is.na(`Content Type (v31) (evar31)`),`Page Name (v6) (evar6)`,NA),na.rm=TRUE))%>%
+  mutate(ref_id=ifelse(is.infinite(ref_id),NA,ref_id),
+         n_clicks_to_article=ifelse(is.infinite(n_clicks_to_article),NA,n_clicks_to_article))
+  
+write.csv(rolled_up_mh,"rolled_up_mh.csv")  
+
+rolled_up_mh<-read.csv("rolled_up_mh.csv")
+```
+RFV Values of interest:
+
+Days between Visit
+Recency (Relative to May 31st)
+Total Visits
+Total Articles Read
+Articles per Visit
+Clicks to Articles
+
+Days between Visit Analysis
+```{r}
+mh_cleaned<-rolled_up_mh%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d")|Date>=as.Date("2024-01-01",format="%Y-%m-%d"))
+
+mh_cleaned
+
+
+days_between_session_group_1<-mh_cleaned%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id)%>%
+  arrange(Date,`Visit.Number`,.by_group=TRUE)%>%
+  mutate(next_date=lag(Date,order_by=ref_id))%>%
+  mutate(days_between_current_and_previous=as.numeric(difftime(next_date,Date,units="days")))
+
+days_between_session_group_2<-mh_cleaned%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id)%>%
+  arrange(Date,`Visit.Number`,.by_group=TRUE)%>%
+  mutate(next_date=lag(Date,order_by=ref_id))%>%
+  mutate(days_between_current_and_previous=as.numeric(difftime(next_date,Date,units="days")))
+
+days_between_session<-rbind(days_between_session_group_1,days_between_session_group_2)
+```
+
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  group_by(time_period)%>%
+  summarise(n_visitors=n_distinct(ref_id),
+            n_visitors_with_one_visit=n_distinct(ifelse(n_visits<2,ref_id,NA),na.rm=TRUE))%>%
+  mutate(prop_of_single_visitors=n_visitors_with_one_visit/n_visitors)
+```
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits<2)%>%
+  group_by(time_period,`Mobile.Device.Type`)%>%
+  summarise(n_visitors=n_distinct(ref_id))%>%
+  mutate(total=sum(n_visitors))%>%
+  mutate(prop=round(n_visitors/total,2)*100)%>%
+  ggplot(aes(time_period,prop,fill=`Mobile.Device.Type`))+geom_bar(stat="identity",position="dodge")+geom_text(aes(label=paste(prop,"%",sep="")),position=position_dodge(width=1),hjust=-0.1)+coord_flip()+theme_minimal()+labs(title="Proportion of Mobile Types for Single Visit Subscribers")
+```
+
+
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  ungroup()%>%
+  group_by(time_period)%>%
+  ggplot(aes(-days_between_current_and_previous,fill=time_period))+geom_histogram(alpha=0.2)+theme_minimal()+xlim(c(1,50))+labs(title="Hist. of Days between Visits By Time Period")
+```
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  group_by(time_period,`Mobile.Device.Type`)%>%
+  summarise(n_visitors=n_distinct(ref_id))%>%
+  mutate(total=sum(n_visitors))%>%
+  mutate(prop=round(n_visitors/total,2)*100)%>%
+  ggplot(aes(time_period,prop,fill=`Mobile.Device.Type`))+geom_bar(stat="identity",position="dodge")+geom_text(aes(label=paste(prop,"%",sep="")),position=position_dodge(width=1),hjust=-0.1)+coord_flip()+theme_minimal()+labs(title="Proportion of Mobile Types for Multi-Visit Subscribers")
+```
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  mutate(previous_device=lag(`Mobile.Device.Type`,order_by=ref_id))%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  group_by(time_period,`Mobile.Device.Type`)%>%
+  ggplot(aes(time_period,days_between_current_and_previous,fill=`Mobile.Device.Type`))+geom_boxplot()+coord_flip()+theme_minimal()+labs(title="Days Between Visits by Device Type (From Previous Visit)")+ylim(c(0,10))
+```
+```{r}
+days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  mutate(previous_device=lag(`Mobile.Device.Type`,order_by=ref_id))%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  mutate(device_pattern=paste(`Mobile.Device.Type`,previous_device,sep="->"))%>%
+  group_by(time_period,device_pattern)%>%
+  ggplot(aes(time_period,days_between_current_and_previous,fill=device_pattern))+geom_boxplot()+coord_flip()+theme_minimal()+labs(title="Days Between Visits by Device Type (From Previous Visit)")+ylim(c(0,10))
+```
+
+```{r}
+modeling_days_between<-days_between_session%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit Number`)))%>%
+  ungroup()%>%
+  filter(n_visits>=2)%>%
+  filter(!is.na(days_between_current_and_previous))%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  select(ref_id,days_between_current_and_previous,`Mobile.Device.Type`,time_period)%>%
+  mutate(device_type=as.factor(`Mobile.Device.Type`),
+         time_period=as.factor(time_period))
+
+mean_days_between_visits<-days_between_session%>%
+  mutate(days_between_current_and_previous=-days_between_current_and_previous)%>%
+  group_by(ref_id)%>%
+  mutate(n_visits=n_distinct(paste(Visitor_ID,`Visit.Number`)))%>%
+  ungroup()%>%
+  group_by(ref_id,time_period)%>%
+  summarise(mean_days_between_visits=mean(days_between_current_and_previous,na.rm=TRUE))%>%
+  filter(!is.na(mean_days_between_visits))%>%
+  mutate(time_period=as.factor(time_period))
+```
+
+
+```{r}
+
+
+gc()
+
+fit_zinb2<-brm(
+  bf(mean_days_between_visits ~ time_period+0,
+     hu~time_period+0),
+  data = mean_days_between_visits,
+  family=hurdle_lognormal(),
+  prior=c(prior(normal(0,10),class="b"),
+           prior(normal(0,10),class="b",dpar="hu"),
+          prior(normal(0,10),class="sigma")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+
+saveRDS(fit_zinb2,"mean_days_between_visits_hurdle_lognormal.rds")
+f<-readRDS("mean_days_between_visits_hurdle_lognormal.rds")
+```
+```{r}
+summary(fit_zinb2)
+prior_summary(fit_zinb2)
+
+conditional_effects(fit_zinb2)
+```
+```{r}
+pp_check(fit_zinb2,ndraws=100)+ggplot2::xlim(0,50)
+```
+
+```{r}
+fit_zinb2%>%
+  epred_draws(newdata = mean_days_between_visits,ndraws=1000)%>%
+ggplot(aes(.epred,fill=time_period)) +geom_histogram()+theme_minimal()
+```
+```{r}
+plot(hypothesis(fit_zinb2,"exp(time_period2023Jan1sttoMay31st)-exp(time_period2024Jan1sttoMay31st)>0"))
+```
+```{r}
+t.test(mean_days_between_visits~time_period,data=mean_days_between_visits,alt="l")
+```
+
+
+```{r}
+`2023_articles_and_visit`<-mh_cleaned%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(total_visits=n_distinct(paste(Visitor_ID,`Visit.Number`,Date)),
+            total_articles=sum(n_articles_visited,na.rm=TRUE))
+
+`2024_articles_and_visit`<-mh_cleaned%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(total_visits=n_distinct(paste(Visitor_ID,`Visit.Number`,Date)),
+            total_articles=sum(n_articles_visited,na.rm=TRUE))
+
+articles_and_visits<-rbind(`2023_articles_and_visit`,`2024_articles_and_visit`)
+
+articles_and_visits
+  
+```
+```{r}
+articles_and_visits%>%
+  mutate(time_period=as.factor(time_period))%>%
+  ggplot(aes(x=time_period,y=total_visits,fill=time_period))+geom_boxplot(outliers = FALSE)+theme_minimal()+coord_flip()
+```
+```{r}
+articles_and_visits%>%
+  mutate(time_period=as.factor(time_period))%>%
+  ggplot(aes(x=total_visits,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(0,50))
+
+articles_and_visits%>%
+  ungroup()%>%
+  mutate(var=var(total_visits),
+         mu=mean(total_visits))
+```
+
+
+```{r}
+gc()
+
+total_visit_negb<-brm(
+  bf(total_visits ~ time_period+0),
+  data = articles_and_visits,
+  family=negbinomial(),
+  prior=c(prior(gamma(0.8,1.3),class="shape")),
+  sample_prior="yes",
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+
+saveRDS(total_visit_negb,"total_visits_negative_binomial.rds")
+
+pp_check(total_visit_negb,ndraws=100)+ggplot2::xlim(0,50)
+```
+```{r}
+summary(total_visit_negb)
+
+prior_summary(total_visit_negb)
+```
+```{r}
+conditional_effects(total_visit_negb)
+```
+
+
+```{r}
+total_visit_negb%>%
+  epred_draws(newdata = articles_and_visits,ndraws=1000)%>%
+ggplot(aes(.epred,fill=time_period)) +geom_histogram()+theme_minimal()
+```
+```{r}
+hypothesis(total_visit_negb,"exp(time_period2024Jan1sttoMay31st)-exp(time_period2023Jan1sttoMay31st)>0")
+```
+
+
+```{r}
+plot(hypothesis(total_visit_negb,"exp(time_period2024Jan1sttoMay31st)-exp(time_period2023Jan1sttoMay31st)>0"))
+```
+
+
+
+
+```{r}
+t.test(total_visits~time_period,data=articles_and_visits,alt="l")
+```
+
+```{r}
+articles_and_visits%>%
+  mutate(time_period=as.factor(time_period))%>%
+  ggplot(aes(x=time_period,y=total_articles,fill=time_period))+geom_boxplot(outliers = FALSE)+theme_minimal()+coord_flip()
+```
+```{r}
+articles_and_visits%>%
+  mutate(articles_per_visit=total_articles/total_visits)%>%
+  ggplot(aes(articles_per_visit,fill=time_period))+geom_histogram()+theme_minimal()
+```
+```{r}
+cumulative_days_2023<-mh_cleaned%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+  select(ref_id,time_period,Date)%>%
+  distinct()%>%
+  group_by(ref_id)%>%
+    mutate(cumulative_days=0)%>%
+    mutate(lead_date=lead(Date),
+         difft=abs(as.numeric(difftime(lead_date,Date,units = "days"))))
+
+cumulative_days_2024<-mh_cleaned%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+  select(ref_id,time_period,Date)%>%
+  distinct()%>%
+  group_by(ref_id)%>%
+  mutate(cumulative_days=0)%>%
+    mutate(lead_date=lead(Date),
+         difft=abs(as.numeric(difftime(lead_date,Date,units = "days"))))
+
+cumulative_days<-rbind(cumulative_days_2023,cumulative_days_2024)
+```
+
+```{r}
+consec_days_table<-cumulative_days%>%
+  mutate(lag_date=lag(Date))%>%
+  mutate(diff_prev=abs(as.numeric(difftime(Date,lag_date,units="days"))))%>%
+  filter(difft==1|diff_prev==1)
+
+ 
+cleaned_consec_days<-consec_days_table%>%
+  group_by(ref_id,time_period)%>%
+  mutate(start=if_else((diff_prev!=1)|(is.na(diff_prev)),Date,NA))%>%
+  mutate(start=na.locf(start,na.rm=TRUE))%>%
+  group_by(ref_id,time_period,start)%>%
+  summarise(n_consec_days=n_distinct(Date))
+
+cleaned_consec_days%>%
+  ggplot(aes(n_consec_days,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(0,10))
+
+```
+```{r} 
+three_consecutive_days<-cleaned_consec_days%>%
+  filter(n_consec_days>1)
+```
+
+```{r}
+cumulative_proportion<-cumulative_days%>%
+  ungroup()%>%
+  mutate(has_had_two_consec=ifelse(ref_id%in%three_consecutive_days$ref_id,1,0))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(max_has_had_two_consec=max(has_had_two_consec))%>%
+  group_by(time_period)%>%
+  summarise(total_users=n_distinct(ref_id),
+            users_that_had_two_consecutive_day_visits=n_distinct(ifelse(max_has_had_two_consec==1,ref_id,NA),na.rm=TRUE))%>%
+  mutate(prop=users_that_had_two_consecutive_day_visits/total_users)
+
+cumulative_proportion
+```
+```{r}
+gc()
+
+consecutive_day_users_beta_binomial <- brm(
+  bf(users_that_had_two_consecutive_day_visits | trials(total_users) ~ 0 + time_period),
+  data = cumulative_proportion,
+  family = binomial(link = "identity"),
+  prior = c(prior(beta(1, 1), class = "b", dpar = "mu", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+
+saveRDS(consecutive_day_users_beta_binomial,"consecutive_days_binomial.rds")
+
+
+consecutive_day_users_beta_binomial
+```
+```{r}
+consecutive_day_users_beta_binomial%>% 
+  epred_draws(newdata = cumulative_proportion) %>% 
+  mutate(.epred_prop = .epred / total_users) %>% 
+  ungroup() %>% 
+  mutate(category = fct_relevel(time_period))%>%
+  compare_levels(.epred_prop, by = time_period,
+                 comparison = "pairwise")%>%
+  ggplot(aes(x = .epred_prop)) +
+  stat_halfeye() +
+  scale_x_continuous(labels = label_percent(), expand = c(0, 0.015)) +
+  guides(fill = "none") +
+  labs(x = "Percentage Point Diff in Proportions (2023 vs. 2024)",
+       y = NULL) +
+  theme_minimal()
+```
+
+
+```{r}
+prop.test(x=c(11574,12926),n=c(17823,19048),alt="l")
+```
+```{r}
+hypothesis(consecutive_day_users_beta_binomial,"time_period2024Jan1sttoMay31st-time_period2023Jan1sttoMay31st>0")
+```
+
+
+```{r}
+prior_summary(consecutive_day_users_beta_binomial)
+```
+
+
+
+```{r}
+cleaned_consec_days%>%
+  ggplot(aes(time_period,n_consec_days,fill=time_period))+geom_boxplot(outliers=FALSE)+theme_minimal()+coord_flip()
+```
+```{r}
+articles_and_visits%>%
+  group_by(ref_id)%>%
+  arrange(ref_id)
+```
+```{r}
+articles_and_visits%>%
+  group_by(ref_id)%>%
+  summarise(n=n())
+
+sample_list<-sample(x=articles_and_visits$ref_id,size=3000)
+
+sampled_articles_and_visits<-articles_and_visits%>%
+  filter(ref_id%in%sample_list)
+
+sampled_articles_and_visits
+```
+
+```{r}
+gc()
+
+consec_days_model<-brm(
+  bf(total_articles ~ time_period+(1|ref_id)+0),
+  data = sampled_articles_and_visits,
+  family=negbinomial(),
+  prior=c(
+          prior(normal(0,10),class="b"),
+          prior(cauchy(0,2),class="sd"),
+          prior(gamma(1.3,0.1),class="shape")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+
+consec_days_model
+saveRDS(consec_days_model,"total_articles_negative_binomial.rds")
+```
+
+```{r}
+pp_check(consec_days_model)+ggplot2::xlim(0,50)
+```
+
+```{r}
+conditional_effects(consec_days_model)
+```
+```{r}
+prior_summary(consec_days_model)
+```
+
+```{r}
+consec_days_model%>%
+  epred_draws(newdata = sampled_articles_and_visits,ndraws=100)%>%
+  mutate(time_period = fct_relevel(time_period))%>%
+ggplot(aes(.epred,fill=time_period)) +geom_histogram()+theme_minimal()+xlim(c(0,100))
+```
+```{r}
+t.test(total_articles~time_period,data=articles_and_visits,alt="l")
+```
+
+```{r}
+posterior_epred()
+```
+```{r}
+hypothesis(consec_days_model,"exp(time_period2023Jan1sttoMay31st)<exp(time_period2024Jan1sttoMay31st)")
+```
+Number of Articles per Week
+```{r}
+mh_cleaned
+
+articles_per_week_2023<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+  mutate(ref_dates=floor_date(Date,"week"))%>%
+  group_by(ref_id,time_period,ref_dates)%>%
+  summarise(n_articles_read=sum(n_articles_visited))%>%
+  ungroup()%>%
+  spread(ref_dates,n_articles_read)%>%
+  gather("week","articles_read",`2023-01-01`:`2023-05-28`)%>%
+  arrange(ref_id)%>%
+  mutate(articles_read=ifelse(is.na(articles_read),0,articles_read))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(n_weeks=n_distinct(week),
+            total_articles_read=sum(articles_read))%>%
+  mutate(articles_per_week=total_articles_read/n_weeks)
+
+articles_per_week_2024<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+  mutate(ref_dates=floor_date(Date,"week"))%>%
+  group_by(ref_id,time_period,ref_dates)%>%
+  summarise(n_articles_read=sum(n_articles_visited))%>%
+  ungroup()%>%
+  spread(ref_dates,n_articles_read)%>%
+  gather("week","articles_read",`2023-12-31`:`2024-05-26`)%>%
+  arrange(ref_id)%>%
+  mutate(articles_read=ifelse(is.na(articles_read),0,articles_read))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(n_weeks=n_distinct(week),
+            total_articles_read=sum(articles_read))%>%
+  mutate(articles_per_week=total_articles_read/n_weeks)
+
+articles_per_week<-rbind(articles_per_week_2023,articles_per_week_2024)
+```
+
+```{r}
+articles_per_week%>%
+  ggplot(aes(time_period,articles_per_week,fill=time_period))+geom_boxplot(outliers=FALSE)+theme_minimal()
+```
+
+```{r}
+t.test(articles_per_week~time_period,data=articles_per_week,alt="l")
+```
+```{r}
+articles_per_week%>%
+  ggplot(aes(articles_per_week,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(0,20))
+```
+```{r}
+articles_per_week%>%
+  ungroup()%>%
+  mutate(var_articles=var(articles_per_week),
+         mean_articles=mean(articles_per_week)
+         )
+```
+```{r}
+articles_per_week%>%
+  mutate(is_zero=ifelse(articles_per_week==0,1,0))%>%
+  group_by(time_period,is_zero)%>%
+  summarise(counts_of_individuals=n_distinct(ref_id))%>%
+  ungroup()%>%
+  group_by()
+```
+
+```{r}
+articles_per_week_hurdle_log_normal<-brm(
+  bf(articles_per_week ~ time_period+0+(1|ref_id),
+     hu~time_period+0),
+  data = articles_per_week,
+  family=hurdle_lognormal(),
+  prior=c(prior(normal(0,10),class="b"),
+           prior(normal(0,10),class="b",dpar="hu"),
+          prior(normal(0,10),class="sigma")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+
+saveRDS(articles_per_week_hurdle_log_normal,"articles_per_week_hurdle.rds")
+```
+
+```{r}
+summary(articles_per_week_hurdle_log_normal)
+```
+```{r}
+pp_check(articles_per_week_hurdle_log_normal,ndraws=100)+ggplot2::xlim(0,10)
+```
+
+```{r}
+conditional_effects(articles_per_week_hurdle_log_normal)
+```
+```{r}
+hypothesis(articles_per_week_hurdle_log_normal,"exp(time_period2024Jan1sttoMay31st)-exp(time_period2023Jan1sttoMay31st)>0")
+```
+```{r}
+articles_per_week_no_zero<-articles_per_week%>%
+  filter(total_articles_read!=0)
+
+articles_per_week_no_zero
+```
+
+```{r}
+articles_per_week_log_normal_no_zeros<-brm(
+  bf(articles_per_week ~ time_period+0),
+  data = articles_per_week_no_zero,
+  family=lognormal(),
+  prior=c(prior(normal(0,10),class="b"),
+          prior(normal(0,10),class="sigma")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+
+articles_per_week_log_normal_no_zeros
+```
+```{r}
+pp_check(articles_per_week_log_normal_no_zeros,ndraws=100)+ggplot2::xlim(0,5)
+```
+```{r}
+conditional_effects(articles_per_week_log_normal_no_zeros)
+```
+```{r}
+visitors_per_day_2023<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(Date,time_period)%>%
+  summarise(n_visitors=n_distinct(ref_id))
+
+visitors_per_day_2024<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+  group_by(Date,time_period)%>%
+  summarise(n_visitors=n_distinct(ref_id))
+
+visitors_per_day<-rbind(visitors_per_day_2023,visitors_per_day_2024)
+
+visitors_per_day%>%
+  ggplot(aes(n_visitors,fill=time_period))+geom_histogram()+theme_minimal()+xlim(c(1500,5000))
+```
+```{r}
+visitors_per_day%>%
+  mutate(day_of_week=weekdays(Date))%>%
+  mutate(is_weekend=ifelse(day_of_week=="Saturday"|day_of_week=="Sunday",TRUE,FALSE))%>%
+  ggplot(aes(n_visitors,fill=is_weekend))+geom_histogram(position="dodge")
+  ggplot(aes(time_period,n_visitors,fill=time_period))+geom_boxplot()+theme_minimal()
+```
+```{r}
+visitors_per_day<-visitors_per_day%>%
+  mutate(day_of_week=weekdays(Date))%>%
+  mutate(is_weekend=ifelse(day_of_week=="Saturday"|day_of_week=="Sunday",TRUE,FALSE))
+
+visitors_per_day_weekend<-visitors_per_day%>%
+  filter(is_weekend==TRUE)
+
+visitors_per_day_weekend%>%
+  ggplot(aes(n_visitors))+geom_histogram()
+
+
+
+gc()
+visitors_per_day_weekend_mixture<-brm(bf(n_visitors~time_period+0),
+                      family=gaussian,
+                      data=visitors_per_day_weekend,
+                      prior=c(prior(normal(0,100),dpar="mu")),
+                      chains = 6, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+                      refresh = 0,
+                      cores=4,
+                      threads=threading(2))
+
+saveRDS(visitors_per_day_weekend,"visitors_per_day_weekend.rds")
+```
+```{r}
+t.test(n_visitors~time_period,data=visitors_per_day)
+```
+
+
+
+
+```{r}
+visitors_per_day_weekend_mixture
+```
+```{r}
+pp_check(visitors_per_day_weekend_mixture,ndraws=1000)+ggplot2::xlim(1,1000)
+```
+```{r}
+check_hmc_diagnostics(visitors_per_day_weekend_mixture$fit)
+```
+```{r}
+prior_summary(visitors_per_day_mixture)
+```
+```{r}
+conditional_effects(visitors_per_day_weekend_mixture)
+```
+
+```{r}
+hypothesis(visitors_per_day_weekend_mixture,"time_period2024Jan1sttoMay31st-time_period2023Jan1sttoMay31st>0")
+```
+```{r}
+visitors_per_day_weekday<-visitors_per_day%>%
+  filter(is_weekend==FALSE)
+
+visitors_per_day_weekday
+```
+```{r}
+gc()
+
+visitors_per_day_weekday_mixture<-brm(bf(n_visitors~time_period+0),
+                      family=gaussian,
+                      data=visitors_per_day_weekday,
+                      prior=c(prior(normal(1000,1000),dpar="mu")),
+                      chains = 6, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+                      refresh = 0,
+                      cores=4,
+                      threads=threading(2))
+
+
+saveRDS(visitors_per_day_weekday_mixture,"visitors_per_day_weekday.rds")
+```
+```{r}
+pp_check(visitors_per_day_weekday_mixture,ndraws=1000)
+```
+```{r}
+conditional_effects(visitors_per_day_weekday_mixture)
+```
+```{r}
+plot(hypothesis(visitors_per_day_weekday_mixture,"time_period2024Jan1sttoMay31st-time_period2023Jan1sttoMay31st>0"))
+```
+```{r}
+```
+
+
+
+R
+```{r}
+recency_2023<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date<=as.Date("2023-05-31",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  group_by(ref_id,time_period)%>%
+  summarise(last_article_visit=max(if_else(n_articles_visited>0,Date,NA),na.rm=TRUE))%>%
+  mutate(end_date=as.Date("2023-05-31",format="%Y-%m-%d"),
+         recency=as.integer(difftime(end_date,last_article_visit,units="days")))%>%
+  mutate(recency=ifelse(is.na(recency),149,recency))
+
+recency_2024<-mh_cleaned%>%
+  mutate(Date=as.Date(Date,format="%Y-%m-%d"))%>%
+  filter(Date>=as.Date("2024-01-01",format="%Y-%m-%d"))%>%
+  mutate(ref_id=ifelse(ref_id==1,Visitor_ID,ref_id))%>%
+  mutate(time_period=ifelse(Date<=as.Date("2023-05-31",format="%Y-%m-%d"),"2023 Jan 1st to May 31st","2024 Jan 1st to May 31st"))%>%
+  ungroup()%>%
+ group_by(ref_id,time_period)%>%
+  summarise(last_article_visit=max(if_else(n_articles_visited>0,Date,NA),na.rm=TRUE))%>%
+  mutate(end_date=as.Date("2024-05-31",format="%Y-%m-%d"),
+         recency=as.integer(difftime(end_date,last_article_visit,units="days")))%>%
+  mutate(recency=ifelse(is.na(recency),150,recency))
+
+recency<-rbind(recency_2023,recency_2024)
+```
+
+```{r}
+prop_recency<-recency%>%
+  mutate(had_read_article=ifelse(time_period=="2023 Jan 1st to May 31st"&recency==149&is.infinite(last_article_visit),0,
+                                 ifelse(time_period=="2024 Jan 1st to May 31st"&is.infinite(last_article_visit),0,1)))%>%
+  group_by(time_period)%>%
+  summarise(n_distinct_users=n_distinct(ref_id),
+            users_without_article_visits=n_distinct(ifelse(had_read_article==0,ref_id,NA),na.rm=TRUE))%>%
+  mutate(prop_users_without_article_visits=round(users_without_article_visits/n_distinct_users*100,2))
+
+prop_recency
+```
+```{r}
+prop.test(x=c(981,810),n=c(17823,19412),alt="g")
+```
+```{r}
+gc()
+
+recency_beta_binomial <- brm(
+  bf(users_without_article_visits | trials(n_distinct_users) ~ 0 + time_period),
+  data = prop_recency,
+  family = binomial(link = "identity"),
+  prior = c(prior(beta(1, 1), class = "b", dpar = "mu", lb = 0, ub = 1)),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0
+)
+
+summary(recency_beta_binomial)
+
+saveRDS(recency_beta_binomial,"recency_beta_binomial.rds")
+```
+```{r}
+pp_check(recency_beta_binomial,ndraws=1000)
+```
+
+```{r}
+conditional_effects(recency_beta_binomial)
+```
+```{r}
+recency_beta_binomial%>% 
+  tidybayes::epred_draws(newdata = prop_recency)%>%
+  mutate(.epred_prop = .epred / n_distinct_users) %>% 
+  ggplot(aes(x = .epred_prop, y = time_period, fill = time_period))+stat_halfeye()+theme_minimal()+labs(x="Proportion of Subscribers with No Article Visits",y=NULL)+guides(fill="none")+scale_x_continuous(labels = label_percent())
+```
+```{r}
+plot(hypothesis(recency_beta_binomial,"time_period2023Jan1sttoMay31st*100-time_period2024Jan1sttoMay31st*100>0"))
+```
+```{r}
+recency%>%
+  mutate(had_read_article=ifelse(time_period=="2023 Jan 1st to May 31st"&recency==149&is.infinite(last_article_visit),0,
+                                 ifelse(time_period=="2024 Jan 1st to May 31st"&is.infinite(last_article_visit),0,1)))%>%
+  ungroup()%>%
+  filter(had_read_article==1)%>%
+  ggplot(aes(recency,fill=time_period))+geom_histogram()+theme_minimal()
+
+```
+```{r}
+recency%>%
+  mutate(had_read_article=ifelse(time_period=="2023 Jan 1st to May 31st"&recency==149&is.infinite(last_article_visit),0,
+                                 ifelse(time_period=="2024 Jan 1st to May 31st"&is.infinite(last_article_visit),0,1)))%>%
+  ungroup()%>%
+  filter(had_read_article==1)%>%
+  ggplot(aes(recency,fill=time_period))+geom_boxplot()+theme_minimal()
+```
+```{r}
+no_na_recency<-recency%>%
+  mutate(had_read_article=ifelse(time_period=="2023 Jan 1st to May 31st"&recency==149&is.infinite(last_article_visit),0,
+                                 ifelse(time_period=="2024 Jan 1st to May 31st"&is.infinite(last_article_visit),0,1)))%>%
+  ungroup()%>%
+  filter(had_read_article==1)
+
+
+t.test(recency~time_period,data=no_na_recency,alt="l")
+```
+Initial Model, Negative Binomial with no Mixed Effects
+
+```{r}
+recency_negative_binomial<-brm(
+  bf(recency ~ time_period+0),
+  data = no_na_recency,
+  family=negbinomial(),
+  prior=c(
+          prior(uniform(0,150),class="b",lb=0,ub=150),
+          prior(gamma(1,0.5),class="shape")),
+  chains = CHAINS, warmup = WARMUP, iter = ITER, seed = BAYES_SEED,
+  refresh = 0,
+  cores=4,
+  threads=threading(2)
+)
+saveRDS(consec_days_model,"recency_negative_binomial.rds")
+```
+```{r}
+recency_negative_binomial<-readRDS("recency_negative_binomial.rds")
+summary(recency_negative_binomial)
+```
+```{r}
+prior_summary(recency_negative_binomial)
+```
+```{r}
+conditional_effects(consec_days_model)
+```
+
+```{r}
+pp_check(recency_negative_binomial,ndraws=1000)
+```
+
+
+```{r}
+hypothesis(consec_days_model,"exp(time_period2024Jan1sttoMay31st)-exp(time_period2023Jan1sttoMay31st)>0")
+```
+```{r}
+consec_days_model%>% 
+  add_epred_draws(newdata = no_na_recency,ndraws=100)%>%
+  mutate(time_period = fct_relevel(time_period))%>%
+  ggplot(aes(x = time_period)) +
+  stat_halfeye(aes(y=.epred),side="bottom",scale=0.5) +
+  guides(fill = "none") +
+  theme_minimal()
+```
+
+
+
+
+
+

@@ -1,0 +1,8 @@
+"0","articles_per_week%>%
+  mutate(is_zero=ifelse(articles_per_week==0,1,0))%>%
+  group_by(time_period,is_zero)%>%
+  summarise(counts_of_individuals=n_distinct(ref_id))%>%
+  ungroup()
+"
+"1","[38;5;232m`summarise()` has grouped output by 'time_period'. You can override using the `.groups` argument.[39m
+"

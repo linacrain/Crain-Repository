@@ -1,0 +1,9 @@
+"0","recency%>%
+  mutate(had_read_article=ifelse(time_period==""2023 Jan 1st to May 31st""&recency==149&is.infinite(last_article_visit),0,
+                                 ifelse(time_period==""2024 Jan 1st to May 31st""&is.infinite(last_article_visit),0,1)))%>%
+  ungroup()%>%
+  filter(had_read_article==1)%>%
+  ggplot(aes(recency,fill=time_period))+geom_histogram()+theme_minimal()
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"

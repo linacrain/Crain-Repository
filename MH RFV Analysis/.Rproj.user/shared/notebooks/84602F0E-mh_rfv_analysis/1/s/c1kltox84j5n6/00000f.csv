@@ -1,0 +1,8 @@
+"0","pp_check(fit_zinb2,ndraws=100)+ggplot2::xlim(0,50)
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 109483 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 1011 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"

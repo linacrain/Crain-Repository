@@ -1,0 +1,8 @@
+"0","pp_check(articles_per_week_hurdle_log_normal,ndraws=100)+ggplot2::xlim(0,10)
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 75602 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 643 rows containing non-finite outside the scale range (`stat_density()`).[39m
+"
